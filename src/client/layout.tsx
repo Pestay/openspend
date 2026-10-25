@@ -11,6 +11,23 @@ export function RootLayout() {
             <img src="/logo.svg" alt="" className="h-8 w-8" />
             OpenSpend
           </Link>
+          <nav className="flex items-center gap-1 text-sm">
+            {[
+              { to: '/', label: 'Resumen' },
+              { to: '/categorias', label: 'Categorías' },
+              { to: '/cuentas', label: 'Cuentas' },
+            ].map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="rounded px-3 py-1.5 text-slate-600 hover:bg-slate-200"
+                activeProps={{ className: 'bg-emerald-50 font-medium text-emerald-800 hover:bg-emerald-100' }}
+                activeOptions={{ exact: true, includeSearch: false }}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
           <UserMenu />
         </header>
         <Outlet />

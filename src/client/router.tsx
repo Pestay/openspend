@@ -2,6 +2,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, createRoute, createRouter } from '@tanstack/react-router'
 import { z } from 'zod'
 import { accountsQuery, categoriesQuery, meQuery, summaryQuery, transactionsQuery } from './api'
+import { AccountsPage } from './accounts-page'
+import { CategoriesPage } from './categories-page'
 import { Dashboard, DashboardSkeleton } from './dashboard'
 import { currentMonth, monthRange } from './dates'
 import { ErrorScreen, RootLayout, Splash } from './layout'
@@ -43,7 +45,21 @@ const dashboardRoute = createRoute({
   pendingComponent: DashboardSkeleton,
 })
 
-const routeTree = rootRoute.addChildren([dashboardRoute])
+const categoriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/categorias',
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(categoriesQuery),
+  component: CategoriesPage,
+})
+
+const accountsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/cuentas',
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(accountsQuery),
+  component: AccountsPage,
+})
+
+const routeTree = rootRoute.addChildren([dashboardRoute, categoriesRoute, accountsRoute])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({
