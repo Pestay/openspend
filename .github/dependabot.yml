@@ -1,0 +1,37 @@
+# Dependabot abre PRs de actualización contra main. Pasan por los mismos checks obligatorios
+# (Typecheck, Lint, Tests, Build, Secretos) y se mergean a mano, como cualquier PR.
+# Las alertas de seguridad generan PRs de inmediato, sin esperar el calendario semanal.
+version: 2
+updates:
+  - package-ecosystem: npm # cubre pnpm (pnpm-lock.yaml)
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: America/Santiago
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+      prefix-development: build
+      include: scope
+    groups:
+      # Un solo PR semanal con todas las actualizaciones menores y parches.
+      minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: America/Santiago
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ['*']
+    labels: [dependencies]

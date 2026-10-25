@@ -128,6 +128,12 @@ La suspensión se revisa en cada request, así que corta también las sesiones a
 Bloquearlo además en Auth0 evita que vuelva a ver la pantalla de login. Agrega `--local` para operar sobre la base
 de desarrollo.
 
+### Dependencias (Dependabot)
+
+[`.github/dependabot.yml`](.github/dependabot.yml) revisa cada lunes las dependencias de pnpm y las GitHub Actions y abre
+PRs agrupados (`build(deps)` / `ci(deps)`). Las alertas de seguridad generan PRs de inmediato. Estos PRs pasan por los
+mismos checks obligatorios y se mergean a mano.
+
 ## Estructura
 
 ```
