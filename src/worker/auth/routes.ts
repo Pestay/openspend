@@ -2,12 +2,29 @@ import { AuthorizationError, CimdFetchError, type ConsentDescription } from '@cl
 import { Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
-import { fetchGithubUser, githubAuthorizeUrl, s256 } from './github'
-import { base64url, clearSession, createSession, fromBase64url, getSession, sign, verify, type Session } from './session'
+import { auth0AuthorizeUrl, auth0LogoutUrl, fetchAuth0User, NotInvitedError } from './auth0'
+import { ensureUser } from '../services/users'
+import {
+  base64url,
+  clearSession,
+  createSession,
+  fromBase64url,
+  getSession,
+  s256,
+  sign,
+  verify,
+  type Session,
+} from './session'
 
 const LOGIN_COOKIE = '__Host-login'
 
 export type AuthEnv = { Bindings: Env; Variables: { session: Session } }
+
+// Lo que recibe el endpoint MCP en ctx.props tras validar el token OAuth.
+export interface McpProps {
+  userId: string
+  email: string
+}
 
 // Protege rutas del dashboard/API: sin sesión válida responde 401.
 export const requireSession = createMiddleware<AuthEnv>(async (c, next) => {
@@ -37,7 +54,7 @@ function loginRedirect(c: { req: { url: string } }) {
   return `/auth/login?${new URLSearchParams({ returnTo: url.pathname + url.search })}`
 }
 
-function consentPage(details: ConsentDescription, handle: string, login: string) {
+function consentPage(details: ConsentDescription, handle: string, email: string) {
   const name = escape(details.clientName)
   const origin = details.clientDomain
     ? `Publicada por <strong>${escape(details.clientDomain)}</strong>.`
@@ -47,7 +64,7 @@ function consentPage(details: ConsentDescription, handle: string, login: string)
     `<h1>¿Permitir que ${name} acceda a tus finanzas?</h1>
 <p>${origin} El acceso se enviará a <strong>${escape(details.redirectHost)}</strong>.</p>
 ${details.redirectIsLoopback ? '<p class="warn"><strong>Esto envía acceso a una app en tu computador.</strong> Continúa solo si acabas de iniciar la conexión desde ella.</p>' : ''}
-<p>Podrá leer, crear, editar y eliminar movimientos. Sesión: <strong>${escape(login)}</strong>.</p>
+<p>Podrá leer, crear, editar y eliminar movimientos. Sesión: <strong>${escape(email)}</strong>.</p>
 <form method="post">
   <input type="hidden" name="handle" value="${escape(handle)}">
   ${details.scope.map((s) => `<input type="hidden" name="scope" value="${escape(s)}">`).join('')}
@@ -58,12 +75,15 @@ ${details.redirectIsLoopback ? '<p class="warn"><strong>Esto envía acceso a una
 }
 
 export const authRoutes = new Hono<AuthEnv>()
-  // --- Login del dashboard con GitHub ---
+  // --- Login del dashboard con Auth0 ---
   .get('/auth/login', async (c) => {
     const state = crypto.randomUUID()
+    const nonce = crypto.randomUUID()
     const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)))
     const payload = base64url(
-      new TextEncoder().encode(JSON.stringify({ state, verifier, returnTo: safeReturnTo(c.req.query('returnTo')) })),
+      new TextEncoder().encode(
+        JSON.stringify({ state, nonce, verifier, returnTo: safeReturnTo(c.req.query('returnTo')) }),
+      ),
     )
     setCookie(c, LOGIN_COOKIE, await sign(payload, c.env.SESSION_SECRET), {
       httpOnly: true,
@@ -72,7 +92,7 @@ export const authRoutes = new Hono<AuthEnv>()
       path: '/',
       maxAge: 600,
     })
-    return c.redirect(githubAuthorizeUrl(c.env, state, await s256(verifier)))
+    return c.redirect(auth0AuthorizeUrl(c.env, { state, nonce, codeChallenge: await s256(verifier) }))
   })
   .get('/auth/callback', async (c) => {
     const cookie = getCookie(c, LOGIN_COOKIE)
@@ -81,24 +101,35 @@ export const authRoutes = new Hono<AuthEnv>()
     if (!payload) return c.html(page('Error', '<p>La sesión de login expiró. <a href="/auth/login">Intenta de nuevo</a>.</p>'), 400)
     const login = JSON.parse(new TextDecoder().decode(fromBase64url(payload))) as {
       state: string
+      nonce: string
       verifier: string
       returnTo: string
+    }
+    // Auth0 devuelve error=access_denied cuando la Action bloquea a un usuario no invitado.
+    if (c.req.query('error')) {
+      const description = c.req.query('error_description') ?? 'No se pudo iniciar sesión.'
+      return c.html(page('Acceso denegado', `<p>${escape(description)}</p><p><a href="/auth/logout">Volver</a></p>`), 403)
     }
     const code = c.req.query('code')
     if (!code || c.req.query('state') !== login.state) {
       return c.html(page('Error', '<p>Login inválido. <a href="/auth/login">Intenta de nuevo</a>.</p>'), 400)
     }
-    const user = await fetchGithubUser(c.env, code, login.verifier)
-    if (user.githubUserId !== c.env.ALLOWED_GITHUB_USER_ID) {
-      console.warn(`Login rechazado para GitHub ${user.login} (${user.githubUserId})`)
-      return c.html(page('Acceso denegado', `<p>La cuenta <strong>${escape(user.login)}</strong> no tiene acceso.</p>`), 403)
+    let user: { userId: string; email: string }
+    try {
+      user = await fetchAuth0User(c.env, code, login.verifier, login.nonce)
+    } catch (error) {
+      if (!(error instanceof NotInvitedError)) throw error
+      console.warn(`Login rechazado: ${error.message} no está invitado`)
+      return c.html(page('Acceso denegado', '<p>Esta cuenta no tiene una invitación a OpenSpend.</p>'), 403)
     }
+    await ensureUser(c.env.DB, { id: user.userId, email: user.email })
     await createSession(c, user)
     return c.redirect(login.returnTo)
   })
-  .post('/auth/logout', (c) => {
+  // Cierra la sesión local y también la de Auth0 (si no, el siguiente login entra directo).
+  .on(['GET', 'POST'], '/auth/logout', (c) => {
     clearSession(c)
-    return c.redirect('/')
+    return c.redirect(auth0LogoutUrl(c.env))
   })
 
   // --- Autorización OAuth para clientes MCP (Claude) ---
@@ -107,14 +138,14 @@ export const authRoutes = new Hono<AuthEnv>()
     const session = await getSession(c)
     if (!session) return c.redirect(loginRedirect(c))
     const oauth = c.env.OAUTH_PROVIDER
-    const remember = { secret: c.env.SESSION_SECRET, subject: session.githubUserId }
+    const remember = { secret: c.env.SESSION_SECRET, subject: session.userId }
     const complete = async (request: Parameters<typeof oauth.completeAuthorization>[0]['request'], headers: Headers) => {
       const { redirectTo } = await oauth.completeAuthorization({
         request,
-        userId: session.githubUserId,
-        metadata: { login: session.login },
+        userId: session.userId,
+        metadata: { email: session.email },
         scope: request.scope,
-        props: { githubUserId: session.githubUserId, login: session.login },
+        props: { userId: session.userId, email: session.email } satisfies McpProps,
       })
       headers.set('Location', redirectTo)
       return new Response(null, { status: 302, headers })
@@ -127,7 +158,7 @@ export const authRoutes = new Hono<AuthEnv>()
         const details = await oauth.describeConsent(request)
         const consent = await oauth.beginConsent(request)
         consent.headers.set('Content-Type', 'text/html; charset=utf-8')
-        return new Response(consentPage(details, consent.handle, session.login), { headers: consent.headers })
+        return new Response(consentPage(details, consent.handle, session.email), { headers: consent.headers })
       }
 
       const form = await c.req.formData()

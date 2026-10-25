@@ -3,13 +3,10 @@
 
 PUBLIC_URL=http://localhost:5173
 
-# GitHub OAuth App de desarrollo (callback: http://localhost:5173/auth/callback)
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-
-# ID numérico de la única cuenta de GitHub con acceso (no el username, que puede cambiar).
-# Obtenerlo con: gh api users/<tu-usuario> --jq .id
-ALLOWED_GITHUB_USER_ID=
+# Aplicación de Auth0 (Regular Web Application). Callback: http://localhost:5173/auth/callback
+AUTH0_DOMAIN=
+AUTH0_CLIENT_ID=
+AUTH0_CLIENT_SECRET=
 
 # Firma de cookies de sesión y consentimiento. Generar con: openssl rand -base64 32
 SESSION_SECRET=

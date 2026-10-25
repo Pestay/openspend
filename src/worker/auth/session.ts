@@ -3,11 +3,12 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 
 // Sesión del dashboard: cookie firmada con HMAC-SHA256 (no se guarda nada en el servidor).
 const COOKIE = '__Host-session'
-const MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+// Corta para que un usuario dado de baja en Auth0 pierda el acceso al dashboard pronto.
+const MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 
 export interface Session {
-  githubUserId: string
-  login: string
+  userId: string // sub de Auth0
+  email: string
   exp: number
 }
 
@@ -23,6 +24,11 @@ export function base64url(bytes: ArrayBuffer | Uint8Array): string {
 export function fromBase64url(value: string): Uint8Array {
   const bin = atob(value.replace(/-/g, '+').replace(/_/g, '/'))
   return Uint8Array.from(bin, (c) => c.charCodeAt(0))
+}
+
+// PKCE: code_challenge = BASE64URL(SHA-256(code_verifier))
+export async function s256(verifier: string): Promise<string> {
+  return base64url(await crypto.subtle.digest('SHA-256', encoder.encode(verifier)))
 }
 
 async function hmacKey(secret: string) {
@@ -45,7 +51,7 @@ export async function verify(token: string, secret: string): Promise<string | nu
   return valid ? payload : null
 }
 
-export async function createSession<E extends { Bindings: Env }>(c: Context<E>, user: { githubUserId: string; login: string }) {
+export async function createSession<E extends { Bindings: Env }>(c: Context<E>, user: { userId: string; email: string }) {
   const session: Session = { ...user, exp: Math.floor(Date.now() / 1000) + MAX_AGE_SECONDS }
   const payload = base64url(encoder.encode(JSON.stringify(session)))
   setCookie(c, COOKIE, await sign(payload, c.env.SESSION_SECRET), {
@@ -63,9 +69,7 @@ export async function getSession<E extends { Bindings: Env }>(c: Context<E>): Pr
   const payload = await verify(token, c.env.SESSION_SECRET)
   if (!payload) return null
   const session = JSON.parse(new TextDecoder().decode(fromBase64url(payload))) as Session
-  if (session.exp < Date.now() / 1000) return null
-  // Si cambia el usuario permitido, las sesiones anteriores dejan de valer.
-  if (session.githubUserId !== c.env.ALLOWED_GITHUB_USER_ID) return null
+  if (session.exp < Date.now() / 1000 || !session.userId) return null
   return session
 }
 
