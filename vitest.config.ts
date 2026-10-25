@@ -25,8 +25,8 @@ export default defineConfig(async () => ({
         test: { name: 'worker', include: ['test/**/*.test.ts'], setupFiles: ['./test/setup.ts'] },
       },
       {
-        // Lógica pura del cliente (sin DOM).
-        test: { name: 'client', include: ['src/client/**/*.test.ts'], environment: 'node' },
+        // Lógica pura del cliente, compartida y de las páginas públicas (sin DOM).
+        test: { name: 'client', include: ['src/{client,shared,site}/**/*.test.ts'], environment: 'node' },
       },
     ],
   },

@@ -23,7 +23,7 @@
       </a>
       <nav class="flex items-center gap-1 text-sm">
         <a href="/" class="rounded px-3 py-2 text-slate-600 hover:bg-slate-200">Inicio</a>
-        <a href="/app/" class="rounded bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800">Entrar</a>
+        <a href="/app/" class="rounded bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800" data-signed-in-href="/app/conectar" data-signed-in-label="Ir a la app">Entrar</a>
       </nav>
     </header>
 
@@ -47,58 +47,12 @@
         </p>
       </section>
 
-      <div class="grid gap-6 md:grid-cols-2">
-        <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 class="font-semibold">Claude <span class="font-normal text-slate-400">· web, escritorio y celular</span></h2>
-          <ol class="mt-3 list-inside list-decimal space-y-2 text-sm text-slate-700">
-            <li>Abre <strong>Settings → Connectors</strong> y elige <strong>Add custom connector</strong>.</li>
-            <li>Nombre <code class="rounded bg-slate-100 px-1">OpenSpend</code> y pega la URL de arriba.</li>
-            <li>Presiona <strong>Connect</strong>, inicia sesión y elige <strong>Permitir</strong>.</li>
-            <li>Queda disponible también en la app del celular.</li>
-          </ol>
-        </section>
-
-        <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 class="font-semibold">ChatGPT</h2>
-          <ol class="mt-3 list-inside list-decimal space-y-2 text-sm text-slate-700">
-            <li>Abre <strong>Settings → Apps &amp; Connectors</strong> (según tu plan, puede requerir activar el modo desarrollador).</li>
-            <li>Crea un conector nuevo con la URL de arriba y autenticación OAuth.</li>
-            <li>Inicia sesión y elige <strong>Permitir</strong>.</li>
-          </ol>
-        </section>
-
-        <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 class="font-semibold">Claude Code</h2>
-          <ol class="mt-3 list-inside list-decimal space-y-2 text-sm text-slate-700">
-            <li>En la terminal:</li>
-          </ol>
-          <div class="my-2 flex items-start gap-2">
-            <code id="claude-code-cmd" data-mcp-url data-template="claude mcp add --transport http --scope user openspend {url}" class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs">claude mcp add --transport http --scope user openspend https://…/mcp</code>
-            <button data-copy="claude-code-cmd" class="rounded border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50">Copiar</button>
-          </div>
-          <p class="text-sm text-slate-700">Luego, dentro de Claude Code: <code class="rounded bg-slate-100 px-1">/mcp</code> → <strong>openspend</strong> → <strong>Authenticate</strong>.</p>
-        </section>
-
-        <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 class="font-semibold">Otros <span class="font-normal text-slate-400">· Cursor, VS Code, Cline…</span></h2>
-          <p class="mt-3 text-sm text-slate-700">Agrega un servidor MCP remoto (HTTP) con esta configuración:</p>
-          <div class="my-2 flex items-start gap-2">
-            <pre id="generic-config" data-mcp-url data-template='{ "mcpServers": { "openspend": { "url": "{url}" } } }' class="min-w-0 flex-1 overflow-x-auto rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs">{ "mcpServers": { "openspend": { "url": "https://…/mcp" } } }</pre>
-            <button data-copy="generic-config" class="rounded border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50">Copiar</button>
-          </div>
-          <p class="text-xs text-slate-400">El cliente debe soportar login OAuth para servidores MCP.</p>
-        </section>
-      </div>
+      <!-- Pasos y ejemplos: se dibujan desde src/shared/connect-guide.ts (los comparte la app). -->
+      <div data-guides class="grid gap-6 md:grid-cols-2"></div>
 
       <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 class="text-sm font-medium text-slate-500">Prueba con frases como</h2>
-        <ul class="mt-3 flex flex-wrap gap-2 text-sm">
-          <li class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">“Hoy gasté 8 lucas en almuerzo y 4.200 en uber”</li>
-          <li class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">“Ayer pagué Netflix, 9,99 dólares”</li>
-          <li class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">“Me llegó el sueldo: 1.800.000”</li>
-          <li class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">“¿Cuánto llevo gastado este mes por categoría?”</li>
-          <li class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">“El uber de ayer pásalo a Transporte”</li>
-        </ul>
+        <ul data-examples class="mt-3 flex flex-wrap gap-2 text-sm"></ul>
         <p class="mt-3 text-xs text-slate-400">Antes de guardar, el asistente te muestra una vista previa para que confirmes o corrijas.</p>
       </section>
 
@@ -107,7 +61,7 @@
         <ul class="mt-2 list-inside list-disc space-y-1">
           <li>El acceso a OpenSpend es solo por invitación.</li>
           <li>Cada asistente necesita tu aprobación explícita y solo accede a tus datos.</li>
-          <li>Puedes ver y desconectar tus asistentes desde el dashboard, en "Asistentes con acceso".</li>
+          <li>Puedes ver y desconectar tus asistentes desde la app, en "Conectar asistente".</li>
         </ul>
       </section>
     </main>

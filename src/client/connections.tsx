@@ -11,14 +11,7 @@ export function Connections() {
   const date = (iso: string) => new Date(iso).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' })
 
   return (
-    <Card
-      title="Asistentes con acceso"
-      action={
-        <a href="/conectar/" className="text-sm text-emerald-700 hover:underline">
-          Conectar un asistente →
-        </a>
-      }
-    >
+    <Card title="Asistentes con acceso">
       {connections.length === 0 ? (
         <p className="text-sm text-slate-400">Aún no has conectado ningún asistente.</p>
       ) : (

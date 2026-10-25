@@ -17,6 +17,7 @@ export function RootLayout() {
               { to: '/categorias', label: 'Categorías' },
               { to: '/cuentas', label: 'Cuentas' },
               { to: '/importar', label: 'Importar' },
+              { to: '/conectar', label: 'Conectar asistente' },
             ].map((item) => (
               <Link
                 key={item.to}
@@ -28,9 +29,6 @@ export function RootLayout() {
                 {item.label}
               </Link>
             ))}
-            <a href="/conectar/" className="rounded px-3 py-1.5 text-slate-600 hover:bg-slate-200">
-              Conectar asistente
-            </a>
           </nav>
           <UserMenu />
         </header>

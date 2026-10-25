@@ -27,9 +27,9 @@
         OpenSpend
       </a>
       <nav class="flex items-center gap-1 text-sm">
-        <a href="/conectar/" class="hidden rounded px-3 py-2 text-slate-600 hover:bg-slate-100 sm:inline">Conecta tu asistente</a>
+        <a href="/conectar/" data-signed-in-href="/app/conectar" class="hidden rounded px-3 py-2 text-slate-600 hover:bg-slate-100 sm:inline">Conecta tu asistente</a>
         <a href="https://github.com/carloxhunter/openspend" class="hidden rounded px-3 py-2 text-slate-600 hover:bg-slate-100 sm:inline">GitHub</a>
-        <a href="/app/" class="rounded bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800">Entrar</a>
+        <a href="/app/" class="rounded bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800" data-signed-in-label="Ir a la app">Entrar</a>
       </nav>
     </header>
 
@@ -47,8 +47,8 @@
               Cuéntale lo que gastaste, o mándale la foto de la boleta, y queda registrado y clasificado.
             </p>
             <div class="mt-8 flex flex-wrap gap-3">
-              <a href="/conectar/" class="rounded-lg bg-emerald-700 px-5 py-3 font-medium text-white hover:bg-emerald-800">Conecta tu asistente</a>
-              <a href="/app/" class="rounded-lg border border-slate-300 px-5 py-3 font-medium text-slate-700 hover:bg-slate-50">Entrar al dashboard</a>
+              <a href="/conectar/" data-signed-in-href="/app/conectar" class="rounded-lg bg-emerald-700 px-5 py-3 font-medium text-white hover:bg-emerald-800">Conecta tu asistente</a>
+              <a href="/app/" class="rounded-lg border border-slate-300 px-5 py-3 font-medium text-slate-700 hover:bg-slate-50" data-signed-in-label="Ir al dashboard">Entrar al dashboard</a>
             </div>
             <p class="mt-4 text-sm text-slate-500">Por ahora, el acceso es solo por invitación.</p>
           </div>
@@ -167,10 +167,10 @@
     <footer class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-slate-500">
       <span class="flex items-center gap-2"><img src="/logo.svg" alt="" class="h-5 w-5" /> OpenSpend</span>
       <span class="flex gap-4">
-        <a href="/conectar/" class="hover:text-slate-800">Conecta tu asistente</a>
+        <a href="/conectar/" data-signed-in-href="/app/conectar" class="hover:text-slate-800">Conecta tu asistente</a>
         <a href="https://github.com/carloxhunter/openspend" class="hover:text-slate-800">GitHub</a>
         <a href="https://github.com/carloxhunter/openspend/blob/main/LICENSE" class="hover:text-slate-800">Licencia</a>
-        <a href="/app/" class="hover:text-slate-800">Entrar</a>
+        <a href="/app/" class="hover:text-slate-800" data-signed-in-label="Ir a la app">Entrar</a>
       </span>
     </footer>
   </body>

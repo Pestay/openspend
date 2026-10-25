@@ -46,3 +46,12 @@ describe('asistentes conectados', () => {
     expect(revoke.status).toBe(404)
   })
 })
+
+describe('sesión desde las páginas públicas', () => {
+  it('/api/me responde 401 sin sesión y el email con sesión', async () => {
+    expect((await SELF.fetch('http://localhost/api/me')).status).toBe(401)
+    const res = await SELF.fetch('http://localhost/api/me', { headers: { Cookie: await sessionCookie() } })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ email: 'nav@example.com' })
+  })
+})

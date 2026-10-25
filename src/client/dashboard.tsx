@@ -12,7 +12,6 @@ import {
   useDeleteTransaction,
   useUpdateTransaction,
 } from './api'
-import { Connections } from './connections'
 import { DEFAULT_PAGE_SIZE, formatDate, PAGE_SIZES, pageInfo, type PageSize } from './pagination'
 import { editForm, transactionPatch, type EditForm as EditFormValues } from './transaction-edit'
 import { LastReconciliation } from './reconcile-panel'
@@ -47,7 +46,6 @@ export function Dashboard() {
       <QuickAdd />
       {/* key: al cambiar de período, el paginador vuelve a la primera página. */}
       <TransactionList key={`${from}|${to}`} from={from} to={to} />
-      <Connections />
     </>
   )
 }
