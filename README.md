@@ -9,7 +9,7 @@ pensado para desplegarse gratis en Cloudflare.
 
 - **Cloudflare Workers**: API ([Hono](https://hono.dev)) + front estático + MCP remoto ([SDK oficial v2](https://github.com/modelcontextprotocol/typescript-sdk))
 - **D1** (SQLite) con [Drizzle](https://orm.drizzle.team) para esquema y migraciones
-- **React + Vite + TanStack Query + Tailwind** para el dashboard
+- **React + Vite + TanStack Router + TanStack Query + Tailwind** para el dashboard
 - Tipo de cambio: dólar observado histórico desde [mindicador.cl](https://mindicador.cl), cacheado en D1
 
 ## Desarrollo local
@@ -120,7 +120,7 @@ su fila en la tabla `users` (eso **elimina todos sus datos**).
 
 ```
 src/
-  client/            React (dashboard)
+  client/            React: rutas (TanStack Router), layout y dashboard
   worker/
     api/             Rutas REST (Hono)
     auth/            Login con Auth0, sesión y consentimiento OAuth del MCP
@@ -139,6 +139,9 @@ test/                Tests de aislamiento entre usuarios
 - Cada movimiento guarda **moneda original, tipo de cambio del día y monto en CLP**; las estadísticas usan CLP.
 - **Duplicados**: mismo monto, moneda, tipo y cuenta dentro de ±2 días. Se marcan (`possibleDuplicateOf`) o se omiten con `skipDuplicates`.
 - **Operaciones masivas** usan un único parámetro JSON + `json_each()` para respetar los límites de D1 del plan gratis.
+- **Sin parpadeos al cargar**: el Worker exige sesión antes de entregar la app (si no hay, redirige al login) y los
+  loaders de TanStack Router precargan los datos en TanStack Query antes de dibujar cada ruta. El estado de la vista
+  (ej. el mes) vive en la URL (`/?mes=2026-10`).
 - **Multiusuario**: todas las tablas con datos financieros tienen `user_id`; cada servicio recibe el usuario
   explícitamente y valida que las cuentas, categorías y lotes referenciados le pertenezcan (las claves foráneas solo
   garantizan que existan). Los tests en `test/` verifican el aislamiento.

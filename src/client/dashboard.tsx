@@ -1,79 +1,65 @@
+import { useSuspenseQuery } from '@tanstack/react-query'
+import { getRouteApi, Link } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { formatMoney, type Currency } from '../shared/money'
-import type { Category } from '../shared/types'
 import {
-  useAccounts,
-  useCategories,
+  accountsQuery,
+  categoriesQuery,
+  summaryQuery,
+  transactionsQuery,
   useCreateTransactions,
   useDeleteTransaction,
-  useMe,
-  useSummary,
-  useTransactions,
 } from './api'
+import { currentMonth, monthLabel, monthRange, shiftMonth, today } from './dates'
 
 const clp = (n: number) => formatMoney(n, 'CLP')
 
-function monthRange(month: string) {
-  const [y, m] = month.split('-').map(Number)
-  const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` }
-}
+const route = getRouteApi('/')
 
-function shiftMonth(month: string, delta: number) {
-  const [y, m] = month.split('-').map(Number)
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1))
-  return d.toISOString().slice(0, 7)
-}
-
-function today() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date())
-}
-
-export function App() {
-  const [month, setMonth] = useState(() => today().slice(0, 7))
-  const { from, to } = monthRange(month)
-  const monthLabel = new Date(`${month}-15`).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })
+export function Dashboard() {
+  const { mes = currentMonth() } = route.useSearch()
+  const { from, to } = monthRange(mes)
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
-            <img src="/logo.svg" alt="" className="h-8 w-8" />
-            OpenSpend
-          </h1>
-          <UserMenu />
-          <div className="flex items-center gap-2">
-            <button className="rounded px-2 py-1 hover:bg-slate-200" onClick={() => setMonth(shiftMonth(month, -1))}>
-              ←
-            </button>
-            <span className="w-40 text-center font-medium capitalize">{monthLabel}</span>
-            <button className="rounded px-2 py-1 hover:bg-slate-200" onClick={() => setMonth(shiftMonth(month, 1))}>
-              →
-            </button>
-          </div>
-        </header>
-
-        <SummaryCards from={from} to={to} />
-        <div className="grid gap-6 md:grid-cols-2">
-          <CategoryBreakdown from={from} to={to} />
-          <Accounts />
-        </div>
-        <QuickAdd />
-        <TransactionList from={from} to={to} />
+    <>
+      <nav className="flex items-center justify-center gap-2" aria-label="Mes">
+        <Link to="/" search={{ mes: shiftMonth(mes, -1) }} className="rounded px-2 py-1 hover:bg-slate-200">
+          ←
+        </Link>
+        <span className="w-44 text-center font-medium capitalize">{monthLabel(mes)}</span>
+        <Link to="/" search={{ mes: shiftMonth(mes, 1) }} className="rounded px-2 py-1 hover:bg-slate-200">
+          →
+        </Link>
+      </nav>
+      <SummaryCards from={from} to={to} />
+      <div className="grid gap-6 md:grid-cols-2">
+        <CategoryBreakdown from={from} to={to} />
+        <Accounts />
       </div>
-    </div>
+      <QuickAdd />
+      <TransactionList from={from} to={to} />
+    </>
   )
 }
 
-function UserMenu() {
-  const { data } = useMe()
-  if (!data) return null
+// Esqueleto con la misma forma que el dashboard, mientras llegan los datos de otro mes.
+export function DashboardSkeleton() {
+  const block = 'animate-pulse rounded-xl border border-slate-200 bg-white'
   return (
-    <form method="post" action="/auth/logout" className="order-last flex items-center gap-2 text-sm text-slate-500 sm:order-none">
-      <span>{data.email}</span>
-      <button className="rounded px-2 py-1 hover:bg-slate-200">Salir</button>
-    </form>
+    <div className="space-y-6" aria-busy="true">
+      <div className="mx-auto h-8 w-56 animate-pulse rounded bg-slate-200" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className={`${block} h-24`} />
+        ))}
+      </div>
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className={`${block} h-48`} />
+        <div className={`${block} h-48`} />
+      </div>
+      <div className={`${block} h-28`} />
+      <div className={`${block} h-64`} />
+    </div>
   )
 }
 
@@ -87,18 +73,18 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 
 function SummaryCards({ from, to }: { from: string; to: string }) {
-  const { data } = useSummary(from, to)
+  const { data } = useSuspenseQuery(summaryQuery(from, to))
   const items = [
-    { label: 'Ingresos', value: data?.incomeClp, className: 'text-emerald-600' },
-    { label: 'Gastos', value: data?.expenseClp, className: 'text-rose-600' },
-    { label: 'Neto', value: data?.netClp, className: (data?.netClp ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600' },
+    { label: 'Ingresos', value: data.incomeClp, className: 'text-emerald-600' },
+    { label: 'Gastos', value: data.expenseClp, className: 'text-rose-600' },
+    { label: 'Neto', value: data.netClp, className: data.netClp >= 0 ? 'text-emerald-600' : 'text-rose-600' },
   ]
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       {items.map((item) => (
         <Card key={item.label} title={item.label}>
           <p className={`text-2xl font-semibold tabular-nums ${item.className}`}>
-            {item.value === undefined ? '…' : clp(item.value)}
+            {clp(item.value)}
           </p>
         </Card>
       ))}
@@ -107,8 +93,8 @@ function SummaryCards({ from, to }: { from: string; to: string }) {
 }
 
 function CategoryBreakdown({ from, to }: { from: string; to: string }) {
-  const { data } = useSummary(from, to)
-  const expenses = data?.byCategory.filter((c) => c.kind === 'expense') ?? []
+  const { data } = useSuspenseQuery(summaryQuery(from, to))
+  const expenses = data.byCategory.filter((c) => c.kind === 'expense')
   const max = Math.max(1, ...expenses.map((c) => c.totalClp))
   return (
     <Card title="Gastos por categoría">
@@ -134,12 +120,12 @@ function CategoryBreakdown({ from, to }: { from: string; to: string }) {
 }
 
 function Accounts() {
-  const { data } = useAccounts()
+  const { data } = useSuspenseQuery(accountsQuery)
   return (
     <Card title="Cuentas">
       <ul className="divide-y divide-slate-100">
         {data
-          ?.filter((a) => !a.archived)
+          .filter((a) => !a.archived)
           .map((a) => (
             <li key={a.id} className="flex justify-between py-2 text-sm">
               <span>{a.name}</span>
@@ -152,7 +138,7 @@ function Accounts() {
 }
 
 function QuickAdd() {
-  const { data: categories } = useCategories()
+  const { data: categories } = useSuspenseQuery(categoriesQuery)
   const create = useCreateTransactions()
   const [kind, setKind] = useState<'expense' | 'income'>('expense')
   const [warning, setWarning] = useState<string | null>(null)
@@ -176,7 +162,7 @@ function QuickAdd() {
     form.reset()
   }
 
-  const options = categories?.filter((c: Category) => c.kind === kind) ?? []
+  const options = categories.filter((c) => c.kind === kind)
   const input = 'rounded border border-slate-300 px-2 py-1.5 text-sm'
 
   return (
@@ -215,16 +201,14 @@ function QuickAdd() {
 }
 
 function TransactionList({ from, to }: { from: string; to: string }) {
-  const { data: transactions, isLoading } = useTransactions(from, to)
-  const { data: categories } = useCategories()
+  const { data: transactions } = useSuspenseQuery(transactionsQuery(from, to))
+  const { data: categories } = useSuspenseQuery(categoriesQuery)
   const remove = useDeleteTransaction()
-  const categoryById = new Map(categories?.map((c) => [c.id, c]))
+  const categoryById = new Map(categories.map((c) => [c.id, c]))
 
   return (
     <Card title="Movimientos">
-      {isLoading ? (
-        <p className="text-sm text-slate-400">Cargando…</p>
-      ) : !transactions?.length ? (
+      {transactions.length === 0 ? (
         <p className="text-sm text-slate-400">Sin movimientos este mes.</p>
       ) : (
         <ul className="divide-y divide-slate-100">

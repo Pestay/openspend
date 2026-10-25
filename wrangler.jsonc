@@ -7,8 +7,11 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "observability": { "enabled": true },
   "assets": {
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/auth/*", "/authorize", "/oauth/*", "/mcp", "/mcp/*", "/.well-known/*"]
+    // Todo pasa por el Worker (que exige sesión antes de entregar la app) salvo los archivos
+    // estáticos con hash y los logos, que se sirven directo desde la red de Cloudflare.
+    "run_worker_first": ["/*", "!/assets/*", "!/logo.svg", "!/logo.png", "!/apple-touch-icon.png"]
   },
   "vars": {
     // Se sobrescribe en .dev.vars para desarrollo local.
