@@ -1,9 +1,9 @@
 import { AuthorizationError, CimdFetchError, type ConsentDescription } from '@cloudflare/workers-oauth-provider'
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
 import { auth0AuthorizeUrl, auth0LogoutUrl, fetchAuth0User, NotInvitedError } from './auth0'
-import { ensureUser } from '../services/users'
+import { ensureUser, isActiveUser } from '../services/users'
 import {
   base64url,
   clearSession,
@@ -26,9 +26,15 @@ export interface McpProps {
   email: string
 }
 
+// Sesión válida (cookie firmada y vigente) de un usuario que sigue activo (no suspendido).
+export async function getActiveSession(c: Context<AuthEnv>): Promise<Session | null> {
+  const session = await getSession(c)
+  return session && (await isActiveUser(c.env.DB, session.userId)) ? session : null
+}
+
 // Protege rutas del dashboard/API: sin sesión válida responde 401.
 export const requireSession = createMiddleware<AuthEnv>(async (c, next) => {
-  const session = await getSession(c)
+  const session = await getActiveSession(c)
   if (!session) return c.json({ error: 'No autenticado' }, 401)
   c.set('session', session)
   await next()
@@ -130,6 +136,10 @@ export const authRoutes = new Hono<AuthEnv>()
       return c.html(page('Acceso denegado', '<p>Esta cuenta no tiene una invitación a OpenSpend.</p>'), 403)
     }
     await ensureUser(c.env.DB, { id: user.userId, email: user.email })
+    if (!(await isActiveUser(c.env.DB, user.userId))) {
+      console.warn(`Login rechazado: ${user.email} está suspendido`)
+      return c.html(page('Cuenta suspendida', '<p>Tu cuenta de OpenSpend está suspendida.</p>'), 403)
+    }
     await createSession(c, user)
     return c.redirect(login.returnTo)
   })
@@ -142,7 +152,7 @@ export const authRoutes = new Hono<AuthEnv>()
   // --- Autorización OAuth para clientes MCP (Claude) ---
   // Requiere la sesión del dashboard; luego muestra la página de consentimiento.
   .on(['GET', 'POST'], '/authorize', async (c) => {
-    const session = await getSession(c)
+    const session = await getActiveSession(c)
     if (!session) return c.redirect(loginRedirect(c))
     const oauth = c.env.OAUTH_PROVIDER
     const remember = { secret: c.env.SESSION_SECRET, subject: session.userId }

@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `suspended_at` text;

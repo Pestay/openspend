@@ -1,6 +1,10 @@
 import { env, SELF } from 'cloudflare:test'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { base64url, sign } from '../src/worker/auth/session'
+import { ensureUser } from '../src/worker/services/users'
+
+// Las sesiones solo valen para usuarios registrados y activos.
+beforeEach(() => ensureUser(env.DB, { id: 'auth0|nav', email: 'nav@example.com' }))
 
 async function sessionCookie() {
   const payload = base64url(
@@ -22,5 +26,16 @@ describe('navegación', () => {
     const res = await SELF.fetch('http://localhost/api/no-existe', { headers: { Cookie: await sessionCookie() } })
     expect(res.status).toBe(404)
     expect(await res.json()).toEqual({ error: 'No encontrado' })
+  })
+})
+
+describe('asistentes conectados', () => {
+  it('lista vacía para un usuario sin conexiones y 404 al revocar una ajena o inexistente', async () => {
+    const cookie = { Cookie: await sessionCookie() }
+    const list = await SELF.fetch('http://localhost/api/connections', { headers: cookie })
+    expect(list.status).toBe(200)
+    expect(await list.json()).toEqual([])
+    const revoke = await SELF.fetch('http://localhost/api/connections/no-existe', { method: 'DELETE', headers: cookie })
+    expect(revoke.status).toBe(404)
   })
 })

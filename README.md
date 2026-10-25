@@ -114,9 +114,19 @@ La marca de Universal Login es del tenant: si otra app comparte el tenant, verá
    se agrega su nombre a la lista.
 3. Pídele que entre a la app y use **"¿Olvidaste tu contraseña?"** para definir la suya.
 
-En su primer login se le crean sus categorías y una cuenta "Principal". Para quitar el acceso, bloquea o elimina el
-usuario en Auth0: pierde el dashboard al expirar su sesión (máximo 7 días) y el MCP de inmediato si además se borra
-su fila en la tabla `users` (eso **elimina todos sus datos**).
+En su primer login se le crean sus categorías y una cuenta "Principal".
+
+**Quitar el acceso** (usa el login de Wrangler, así que solo quien administra la cuenta de Cloudflare puede hacerlo):
+
+```bash
+pnpm admin list                    # usuarios, estado y cantidad de movimientos
+pnpm admin suspend <email>         # bloquea dashboard, login y MCP de inmediato; conserva sus datos
+pnpm admin reactivate <email>      # levanta la suspensión
+```
+
+La suspensión se revisa en cada request, así que corta también las sesiones abiertas y los tokens MCP ya emitidos.
+Bloquearlo además en Auth0 evita que vuelva a ver la pantalla de login. Agrega `--local` para operar sobre la base
+de desarrollo.
 
 ## Estructura
 
@@ -166,6 +176,9 @@ test/                Tests de aislamiento entre usuarios
 - [x] MCP remoto para Claude (registrar, buscar, editar, resúmenes)
 - [x] Autenticación (OAuth 2.1 para el MCP)
 - [x] Multiusuario por invitación con Auth0
+- [x] Gestión de categorías (con fusión) y cuentas (con archivado)
+- [x] Página "Conecta tu asistente" con revocación de accesos
 - [ ] Importador desde otras apps de finanzas (CSV) y lotes de importación reversibles
+- [ ] Registro rápido en lenguaje natural dentro del dashboard (Workers AI), con cuota por usuario
 - [ ] Carga de cartolas bancarias
 - [ ] Gráficos y presupuestos por categoría

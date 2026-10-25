@@ -15,6 +15,7 @@ import type { AuthEnv } from '../auth/routes'
 import { getDb } from '../db'
 import { AppError } from '../errors'
 import { createAccount, deleteAccount, updateAccount } from '../services/accounts'
+import { listConnections, revokeConnection } from '../services/connections'
 import { createCategory, deleteCategory, listCategories, updateCategory } from '../services/categories'
 import { getUsdClpRates } from '../services/fx'
 import { getAccountsWithBalance, getSummary } from '../services/summary'
@@ -62,6 +63,12 @@ export const api = new Hono<AuthEnv>()
         c.req.valid('query').reassignTo,
       ),
     ),
+  )
+
+  // Asistentes conectados al MCP (grants OAuth) y su revocación.
+  .get('/connections', async (c) => c.json(await listConnections(c.env.OAUTH_PROVIDER, c.get('session').userId)))
+  .delete('/connections/:grantId', validate('param', z.object({ grantId: z.string().min(1).max(200) })), async (c) =>
+    c.json(await revokeConnection(c.env.OAUTH_PROVIDER, c.get('session').userId, c.req.valid('param').grantId)),
   )
 
   .get('/transactions', validate('query', listTransactionsQuery), async (c) =>

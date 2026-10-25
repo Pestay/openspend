@@ -1,7 +1,7 @@
 {
   "name": "openspend",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "packageManager": "pnpm@10.22.0",
   "scripts": {
@@ -16,7 +16,8 @@
     "db:migrate:local": "wrangler d1 migrations apply openspend --local",
     "db:migrate:remote": "wrangler d1 migrations apply openspend --remote",
     "prepare": "git config core.hooksPath .githooks || true",
-    "test": "vitest run"
+    "test": "vitest run",
+    "admin": "node scripts/admin.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.4",

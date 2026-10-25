@@ -9,7 +9,7 @@ import {
   listTransactions,
   updateTransaction,
 } from '../src/worker/services/transactions'
-import { ensureUser } from '../src/worker/services/users'
+import { ensureUser, isActiveUser } from '../src/worker/services/users'
 
 // Los datos financieros de un usuario nunca deben ser visibles ni modificables por otro.
 
@@ -143,5 +143,27 @@ describe('aislamiento entre usuarios (API)', () => {
     const forged = await sign(payload, 'otro-secreto')
     const res = await SELF.fetch('http://localhost/api/transactions', { headers: { Cookie: `__Host-session=${forged}` } })
     expect(res.status).toBe(401)
+  })
+})
+
+describe('usuarios suspendidos', () => {
+  it('pierden el acceso a la API con su sesión vigente y lo recuperan al reactivarse', async () => {
+    const alice = { headers: { Cookie: await sessionCookie(ALICE) } }
+    expect((await SELF.fetch('http://localhost/api/me', alice)).status).toBe(200)
+
+    await env.DB.prepare("UPDATE users SET suspended_at = '2026-10-25T00:00:00Z' WHERE id = ?").bind(ALICE.id).run()
+    expect(await isActiveUser(env.DB, ALICE.id)).toBe(false)
+    expect((await SELF.fetch('http://localhost/api/me', alice)).status).toBe(401)
+    const nav = await SELF.fetch('http://localhost/', { ...alice, redirect: 'manual' })
+    expect(nav.status).toBe(302)
+
+    await env.DB.prepare('UPDATE users SET suspended_at = NULL WHERE id = ?').bind(ALICE.id).run()
+    expect((await SELF.fetch('http://localhost/api/me', alice)).status).toBe(200)
+  })
+
+  it('el login no reactiva a un usuario suspendido', async () => {
+    await env.DB.prepare("UPDATE users SET suspended_at = '2026-10-25T00:00:00Z' WHERE id = ?").bind(ALICE.id).run()
+    await ensureUser(env.DB, ALICE)
+    expect(await isActiveUser(env.DB, ALICE.id)).toBe(false)
   })
 })
