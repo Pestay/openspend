@@ -21,14 +21,18 @@ const INSTRUCTIONS = `OpenSpend: registro de gastos e ingresos personales (Chile
 
 Flujo recomendado:
 1. Llama a get_context al inicio para conocer la fecha de hoy, las cuentas y las categorías (con sus IDs).
-2. Cuando el usuario cuente gastos o ingresos en texto libre o en una foto de boleta, extrae cada movimiento y regístralos juntos con add_transactions.
+2. Cuando el usuario cuente gastos o ingresos en texto libre o en una foto de boleta, extrae cada movimiento:
    - Sin fecha → hoy (según get_context). "ayer", "el lunes" → calcula la fecha.
    - Sin moneda → CLP. "lucas" = miles de pesos (8 lucas = 8000).
    - Sin cuenta → se usa la cuenta principal.
    - Elige la categoría más adecuada. Si dudas, busca movimientos parecidos con search_transactions (campo q) y usa la categoría que se usó antes.
-3. Después de registrar, muestra un resumen breve (fecha, descripción, monto, categoría) para que el usuario confirme.
-4. Si add_transactions reporta duplicados, pregunta al usuario antes de borrar o volver a insertar.
-5. Para correcciones ("el uber era trabajo") usa search_transactions y luego update_transaction.
+3. ANTES de registrar, muestra una vista previa en tabla (fecha, descripción, monto, moneda, categoría, cuenta) y
+   pregunta si está bien o si quiere cambiar algo. Llama a add_transactions SOLO cuando el usuario confirme.
+   Nunca registres en el mismo turno en que el usuario describe el movimiento.
+4. Después de registrar, confirma brevemente qué quedó guardado. Si add_transactions reporta duplicados, pregunta
+   al usuario antes de borrar o volver a insertar.
+5. Para correcciones ("el uber era trabajo") usa search_transactions, muestra el cambio propuesto y, tras la
+   confirmación, update_transaction. Para borrar, confirma siempre antes de delete_transaction.
 
 Los montos se envían en unidades normales (12990, 9.99), no en centavos.`
 
@@ -109,7 +113,7 @@ export function buildMcpServer(env: Env, userId: string) {
     {
       title: 'Registrar movimientos',
       description:
-        'Registra uno o más gastos, ingresos o transferencias. Detecta posibles duplicados (mismo monto, moneda, tipo y cuenta, ±2 días). Con skipDuplicates=true no inserta los duplicados, solo los reporta.',
+        'Registra uno o más gastos, ingresos o transferencias. Úsala solo después de mostrar una vista previa y que el usuario la confirme. Detecta posibles duplicados (mismo monto, moneda, tipo y cuenta, ±2 días). Con skipDuplicates=true no inserta los duplicados, solo los reporta.',
       inputSchema: createTransactionsInput.omit({ importBatchId: true }),
     },
     (input) =>
@@ -144,7 +148,7 @@ export function buildMcpServer(env: Env, userId: string) {
     {
       title: 'Editar movimiento',
       description:
-        'Modifica campos de un movimiento existente. Si cambia monto, moneda o fecha se recalcula la conversión a CLP. Usa possibleDuplicateOf=null para marcar que no es duplicado.',
+        'Modifica campos de un movimiento existente. Úsala solo después de mostrar el cambio propuesto y que el usuario lo confirme. Si cambia monto, moneda o fecha se recalcula la conversión a CLP. Usa possibleDuplicateOf=null para marcar que no es duplicado.',
       inputSchema: updateTransactionInput.extend({ id: z.number().int().positive() }),
     },
     ({ id, ...patch }) =>
