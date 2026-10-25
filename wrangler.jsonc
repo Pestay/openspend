@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openspend",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  // global_fetch_strictly_public: requerido por OAuth para leer Client ID Metadata Documents.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "observability": { "enabled": true },
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/auth/*", "/authorize", "/oauth/*", "/mcp", "/mcp/*", "/.well-known/*"]
+  },
+  "vars": {
+    // Se sobrescribe en .dev.vars para desarrollo local.
+    "PUBLIC_URL": "https://openspend.elguet5.workers.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "openspend",
+      // Los IDs de recursos no son secretos: sin credenciales de la cuenta no dan acceso.
+      "database_id": "702241ee-b04c-46c8-a7ea-1ae8cd4e732a",
+      "migrations_dir": "db/migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      // Tokens y clientes OAuth del MCP (guardados como hashes).
+      "binding": "OAUTH_KV",
+      "id": "c41d659514c041d39a241a52b920cc3e"
+    }
+  ]
+}
