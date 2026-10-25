@@ -40,6 +40,20 @@ npm install
 npx expo run:android          # build de desarrollo en un emulador o teléfono por USB
 ```
 
+### Probar contra el Worker local, sin Auth0
+
+1. En la raíz: `pnpm db:migrate:local` y `pnpm dev`. Entrar una vez al dashboard local para que exista tu usuario
+   (o insertarlo en la D1 local).
+2. `node scripts/dev-session-cookie.mjs '<userId>' '<email>'` y poner en `mobile/.env`:
+   ```
+   EXPO_PUBLIC_API_URL=http://localhost:5173
+   EXPO_PUBLIC_DEV_SESSION_COOKIE=__Host-session=...
+   ```
+3. `adb reverse tcp:5173 tcp:5173` (el teléfono o emulador ve tu `localhost`) y `npx expo run:android`.
+
+La app se salta el login y usa esa cookie. Solo funciona contra el Worker local: la firma depende del
+`SESSION_SECRET` de tu `.dev.vars`.
+
 APK instalable (se firma con la llave de debug; para Play Store hace falta una llave propia o EAS):
 
 ```sh

@@ -1,7 +1,7 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { TransactionInput } from '../../src/shared/schemas'
 import type { AccountWithBalance, Category, CreateTransactionsResult, Summary, Transaction } from '../../src/shared/types'
-import { API_URL } from './config'
+import { API_URL, DEV_SESSION_COOKIE } from './config'
 
 // Mismo cliente que src/client/api.ts, pero contra la URL del Worker y con el ID token como Bearer.
 
@@ -17,7 +17,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getToken()
   const res = await fetch(`${API_URL}/api${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }), ...init?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(DEV_SESSION_COOKIE && { Cookie: DEV_SESSION_COOKIE }),
+      ...init?.headers,
+    },
   })
   if (res.status === 401) {
     onUnauthorized()

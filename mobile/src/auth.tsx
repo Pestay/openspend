@@ -9,7 +9,7 @@ import {
 import * as SecureStore from 'expo-secure-store'
 import * as WebBrowser from 'expo-web-browser'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { AUTH0_CLIENT_ID, AUTH0_DOMAIN } from './config'
+import { AUTH0_CLIENT_ID, AUTH0_DOMAIN, DEV_SESSION_COOKIE } from './config'
 
 // Login con Auth0 (Native app, Authorization Code + PKCE en el navegador del sistema).
 // La API del Worker acepta el ID token como Bearer; el refresh token permite renovarlo sin
@@ -115,13 +115,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await WebBrowser.openAuthSessionAsync(`https://${AUTH0_DOMAIN}/v2/logout?${query}`, redirectUri)
   }, [save])
 
-  const value: AuthContextValue = {
-    status: tokens === undefined ? 'loading' : tokens ? 'signedIn' : 'signedOut',
-    email: tokens ? (claims(tokens.idToken).email ?? null) : null,
-    login: () => request && promptAsync(),
-    logout,
-    getIdToken,
-  }
+  // Desarrollo local sin Auth0: la cookie de DEV_SESSION_COOKIE reemplaza el login (ver README).
+  const value: AuthContextValue = DEV_SESSION_COOKIE
+    ? { status: 'signedIn', email: 'modo local', login: () => {}, logout: async () => {}, getIdToken: async () => null }
+    : {
+        status: tokens === undefined ? 'loading' : tokens ? 'signedIn' : 'signedOut',
+        email: tokens ? (claims(tokens.idToken).email ?? null) : null,
+        login: () => request && promptAsync(),
+        logout,
+        getIdToken,
+      }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
