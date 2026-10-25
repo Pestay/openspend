@@ -2,7 +2,7 @@ import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { getRouteApi, Link } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { formatMoney, type Currency } from '../shared/money'
-import type { Category, Transaction } from '../shared/types'
+import type { Account, Category, Transaction } from '../shared/types'
 import {
   accountsQuery,
   categoriesQuery,
@@ -10,11 +10,15 @@ import {
   transactionsQuery,
   useCreateTransactions,
   useDeleteTransaction,
+  useMovePreview,
+  useMoveTransactions,
   useUpdateTransaction,
 } from './api'
 import { DEFAULT_PAGE_SIZE, formatDate, PAGE_SIZES, pageInfo, type PageSize } from './pagination'
 import { editForm, transactionPatch, type EditForm as EditFormValues } from './transaction-edit'
+import { effectNote, moveBlockReason, type MoveResult } from './move-logic'
 import { LastReconciliation } from './reconcile-panel'
+import { pageSelection, toggle, togglePage } from './selection'
 import { today } from './dates'
 import { parsePeriod, periodLabel, periodRange, shiftPeriod, totalsByYear, type Bar, type Period, type View } from './period'
 import { Button, Card, ErrorText, inputClass } from './ui'
@@ -281,15 +285,27 @@ function TransactionList({ from, to }: { from: string; to: string }) {
   const info = pageInfo(data?.total ?? 0, page, size)
   const { data: categories } = useSuspenseQuery(categoriesQuery)
   const categoryById = new Map(categories.map((c) => [c.id, c]))
-  // El resumen es solo lectura; editar y eliminar requieren entrar al modo edición.
+  const { data: accounts } = useSuspenseQuery(accountsQuery)
+  const accountById = new Map(accounts.map((a) => [a.id, a]))
+  // El resumen es solo lectura; editar, eliminar y mover requieren entrar al modo edición.
   const [editMode, setEditMode] = useState(false)
+  // Seleccionados para mover en lote; se mantienen al cambiar de página.
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const pageIds = transactions.map((t) => t.id)
+  const pageState = pageSelection(selected, pageIds)
 
   return (
     <Card
       title="Movimientos"
       action={
         data && data.total > 0 ? (
-          <Button variant={editMode ? 'primary' : 'secondary'} onClick={() => setEditMode((v) => !v)}>
+          <Button
+            variant={editMode ? 'primary' : 'secondary'}
+            onClick={() => {
+              setEditMode((v) => !v)
+              setSelected(new Set())
+            }}
+          >
             {editMode ? 'Listo' : 'Editar'}
           </Button>
         ) : undefined
@@ -301,6 +317,15 @@ function TransactionList({ from, to }: { from: string; to: string }) {
         <p className="text-sm text-slate-400">Sin movimientos en este período.</p>
       ) : (
         <>
+        {editMode && (
+          <MoveBar
+            selected={selected}
+            accounts={accounts}
+            pageState={pageState}
+            onTogglePage={() => setSelected((s) => togglePage(s, pageIds))}
+            onClear={() => setSelected(new Set())}
+          />
+        )}
         <ul className={`divide-y divide-slate-100 ${isFetching ? 'opacity-60' : ''}`}>
           {transactions.map((t) => (
             <TransactionRow
@@ -308,7 +333,12 @@ function TransactionList({ from, to }: { from: string; to: string }) {
               transaction={t}
               category={t.categoryId ? categoryById.get(t.categoryId) : undefined}
               categories={categories}
+              accounts={accounts}
+              // Con una sola cuenta no hace falta mostrarla en cada fila.
+              accountName={accounts.length > 1 ? accountById.get(t.accountId)?.name : undefined}
               editMode={editMode}
+              selected={selected.has(t.id)}
+              onToggle={() => setSelected((s) => toggle(s, t.id))}
             />
           ))}
         </ul>
@@ -364,12 +394,20 @@ function TransactionRow({
   transaction: t,
   category,
   categories,
+  accounts,
+  accountName,
   editMode,
+  selected,
+  onToggle,
 }: {
   transaction: Transaction
   category: Category | undefined
   categories: Category[]
+  accounts: Account[]
+  accountName: string | undefined
   editMode: boolean
+  selected: boolean
+  onToggle: () => void
 }) {
   const [mode, setMode] = useState<'view' | 'edit' | 'delete'>('view')
   const remove = useDeleteTransaction()
@@ -379,10 +417,14 @@ function TransactionRow({
   return (
     <li className="py-2 text-sm">
       <div className="flex items-center gap-3">
+        {editMode && (
+          <input type="checkbox" checked={selected} onChange={onToggle} aria-label="Seleccionar movimiento" className="shrink-0" />
+        )}
         <span className="w-24 shrink-0 text-slate-400 tabular-nums">{formatDate(t.date)}</span>
         <span className="shrink-0">{category?.icon ?? '•'}</span>
         <span className="min-w-0 flex-1 truncate">
           {t.description ?? t.merchant ?? category?.name ?? '—'}
+          {accountName && <span className="ml-2 text-xs text-slate-400">· {accountName}</span>}
           {t.possibleDuplicateOf && <span className="ml-2 rounded bg-amber-100 px-1.5 text-xs text-amber-700">¿duplicado?</span>}
         </span>
         <span className={`tabular-nums ${t.kind === 'income' ? 'text-emerald-600' : t.kind === 'expense' ? 'text-rose-600' : ''}`}>
@@ -411,13 +453,23 @@ function TransactionRow({
             </span>
           ))}
       </div>
-      {active === 'edit' && <EditForm transaction={t} categories={categories} onClose={() => setMode('view')} />}
+      {active === 'edit' && <EditForm transaction={t} categories={categories} accounts={accounts} onClose={() => setMode('view')} />}
       <ErrorText error={remove.error} />
     </li>
   )
 }
 
-function EditForm({ transaction, categories, onClose }: { transaction: Transaction; categories: Category[]; onClose: () => void }) {
+function EditForm({
+  transaction,
+  categories,
+  accounts,
+  onClose,
+}: {
+  transaction: Transaction
+  categories: Category[]
+  accounts: Account[]
+  onClose: () => void
+}) {
   const [form, setForm] = useState<EditFormValues>(() => editForm(transaction))
   const [error, setError] = useState<string | null>(null)
   const update = useUpdateTransaction()
@@ -445,6 +497,17 @@ function EditForm({ transaction, categories, onClose }: { transaction: Transacti
             </option>
           ))}
       </select>
+      {accounts.length > 1 && (
+        <select className={inputClass} value={form.accountId} onChange={set('accountId')} aria-label="Cuenta">
+          {accounts
+            .filter((a) => !a.archived || a.id === transaction.accountId)
+            .map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+        </select>
+      )}
       <input className={`${inputClass} min-w-40 flex-1`} value={form.description} onChange={set('description')} placeholder="Descripción" />
       <Button disabled={update.isPending}>Guardar</Button>
       <Button type="button" variant="ghost" onClick={onClose}>
@@ -452,5 +515,151 @@ function EditForm({ transaction, categories, onClose }: { transaction: Transacti
       </Button>
       {(error || update.error) && <span className="w-full text-xs text-rose-600">{error ?? update.error?.message}</span>}
     </form>
+  )
+}
+
+// --- Mover seleccionados a otra cuenta: vista previa con saldos antes/después y confirmación ---
+
+function MoveBar({
+  selected,
+  accounts,
+  pageState,
+  onTogglePage,
+  onClear,
+}: {
+  selected: Set<number>
+  accounts: Account[]
+  pageState: 'none' | 'some' | 'all'
+  onTogglePage: () => void
+  onClear: () => void
+}) {
+  const [accountId, setAccountId] = useState('')
+  const [preview, setPreview] = useState<MoveResult | null>(null)
+  const previewMove = useMovePreview()
+  const move = useMoveTransactions()
+  const blocked = moveBlockReason(selected.size, accountId)
+  const vars = () => ({ ids: [...selected], accountId: Number(accountId) })
+  const reset = () => {
+    setPreview(null)
+    previewMove.reset()
+    move.reset()
+  }
+
+  return (
+    <div className="mb-3 rounded-lg bg-slate-50 p-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-slate-600">
+          <input
+            type="checkbox"
+            checked={pageState === 'all'}
+            ref={(el) => {
+              if (el) el.indeterminate = pageState === 'some'
+            }}
+            onChange={() => {
+              onTogglePage()
+              reset()
+            }}
+          />
+          Página
+        </label>
+        <span className="text-slate-500">
+          {selected.size === 0 ? 'Marca movimientos para moverlos a otra cuenta' : `${selected.size} seleccionados`}
+        </span>
+        {selected.size > 0 && accounts.length > 1 && (
+          <>
+            <select
+              className={inputClass}
+              value={accountId}
+              onChange={(e) => {
+                setAccountId(e.target.value)
+                reset()
+              }}
+              aria-label="Cuenta destino"
+            >
+              <option value="">Mover a…</option>
+              {accounts
+                .filter((a) => !a.archived)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+            </select>
+            <Button
+              variant="secondary"
+              disabled={!!blocked || previewMove.isPending}
+              title={blocked ?? undefined}
+              onClick={() => previewMove.mutate(vars(), { onSuccess: setPreview })}
+            >
+              Ver efecto
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                onClear()
+                reset()
+              }}
+            >
+              Limpiar
+            </Button>
+          </>
+        )}
+        {selected.size > 0 && accounts.length <= 1 && (
+          <span className="text-xs text-slate-400">Crea otra cuenta en Cuentas para poder moverlos.</span>
+        )}
+      </div>
+
+      {preview && (
+        <div className="mt-2 space-y-2 rounded border border-slate-200 bg-white p-2">
+          <p>
+            Se moverán <strong>{preview.moved}</strong> movimientos
+            {preview.alreadyThere > 0 && ` (${preview.alreadyThere} ya estaban en esa cuenta)`}.
+          </p>
+          <table className="w-full text-left">
+            <thead className="text-xs text-slate-400">
+              <tr>
+                <th className="font-normal">Cuenta</th>
+                <th className="text-right font-normal">Saldo actual</th>
+                <th className="text-right font-normal">Después</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.accounts.map((a) => {
+                const note = effectNote(a)
+                return (
+                  <tr key={a.accountId} className="align-top">
+                    <td className="py-1">
+                      {a.name}
+                      {note && <p className="text-xs text-amber-700">{note}</p>}
+                    </td>
+                    <td className="py-1 text-right tabular-nums">{formatMoney(a.beforeMinor, a.currency)}</td>
+                    <td className="py-1 text-right tabular-nums">{formatMoney(a.afterMinor, a.currency)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <div className="flex gap-2">
+            <Button
+              disabled={move.isPending || preview.moved === 0}
+              onClick={() =>
+                move.mutate(vars(), {
+                  onSuccess: () => {
+                    onClear()
+                    reset()
+                  },
+                })
+              }
+            >
+              Mover
+            </Button>
+            <Button variant="ghost" onClick={reset}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
+      <ErrorText error={previewMove.error ?? move.error} />
+    </div>
   )
 }

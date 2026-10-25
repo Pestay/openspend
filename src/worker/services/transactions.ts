@@ -7,6 +7,7 @@ import type { CreateTransactionsResult, Transaction } from '../../shared/types'
 import { addDays, type Db } from '../db'
 import { AppError } from '../errors'
 import { getUsdClpRates } from './fx'
+import { balancesWithDeltas } from './reconciliations'
 
 // Ventana (± días) para considerar que dos movimientos iguales podrían ser el mismo.
 const DUPLICATE_WINDOW_DAYS = 2
@@ -243,6 +244,77 @@ export async function updateTransaction(
 
   const [updated] = await db.update(transactions).set(changes).where(owned).returning()
   return updated
+}
+
+export interface MoveInput {
+  ids: number[]
+  accountId: number
+  dryRun?: boolean
+}
+
+/**
+ * Mueve movimientos a otra cuenta (o, con dryRun, solo calcula el efecto). Devuelve el saldo
+ * antes y después de cada cuenta afectada y cuántos movimientos quedan "dentro" de su última
+ * conciliación, porque esos no cambian su saldo actual.
+ */
+export async function moveTransactions(d1: D1Database, userId: string, input: MoveInput) {
+  const [rows, targetRows] = await d1.batch([
+    d1
+      .prepare(
+        `SELECT t.id, t.date, t.kind, t.amount_minor AS amountMinor, t.currency, t.amount_clp AS amountClp,
+           t.account_id AS accountId, t.to_account_id AS toAccountId, a.currency AS accountCurrency
+         FROM transactions t JOIN accounts a ON a.id = t.account_id
+         WHERE t.user_id = ?1 AND t.id IN (SELECT value FROM json_each(?2))`,
+      )
+      .bind(userId, JSON.stringify(input.ids)),
+    d1.prepare('SELECT id, currency, archived FROM accounts WHERE id = ? AND user_id = ?').bind(input.accountId, userId),
+  ])
+  type Row = {
+    id: number
+    date: string
+    kind: string
+    amountMinor: number
+    currency: string
+    amountClp: number
+    accountId: number
+    toAccountId: number | null
+    accountCurrency: string
+  }
+  const found = rows.results as Row[]
+  const target = targetRows.results[0] as { id: number; currency: string; archived: number } | undefined
+  if (!target) throw new AppError(`La cuenta ${input.accountId} no existe`, 404)
+  if (target.archived) throw new AppError('La cuenta destino está archivada')
+  const missing = input.ids.filter((id) => !found.some((t) => t.id === id))
+  if (missing.length > 0) throw new AppError(`Movimientos no encontrados: ${missing.join(', ')}`, 404)
+  if (found.some((t) => t.toAccountId === target.id)) {
+    throw new AppError('Una transferencia no puede quedar con la misma cuenta de origen y destino')
+  }
+
+  const toMove = found.filter((t) => t.accountId !== target.id)
+  // Variación en la moneda de cada cuenta, igual que el cálculo de saldos.
+  const delta = (t: Row, currency: string) => (t.kind === 'income' ? 1 : -1) * (t.currency === currency ? t.amountMinor : t.amountClp)
+  const deltas = toMove.flatMap((t) => [
+    { accountId: t.accountId, date: t.date, delta: -delta(t, t.accountCurrency) },
+    { accountId: target.id, date: t.date, delta: delta(t, target.currency) },
+  ])
+  const effects = await balancesWithDeltas(d1, userId, deltas)
+  const affected = [...new Set([...toMove.map((t) => t.accountId), target.id])]
+  const accounts = affected.map((accountId) => {
+    const effect = effects.get(accountId)!
+    const anchoredCount = toMove.filter((t) => effect.lastReconciliationDate && t.date <= effect.lastReconciliationDate).length
+    return { accountId, ...effect, anchoredCount }
+  })
+
+  if (!input.dryRun && toMove.length > 0) {
+    await d1
+      .prepare(
+        `UPDATE transactions SET account_id = ?1, updated_at = ?2
+         WHERE user_id = ?3 AND id IN (SELECT value FROM json_each(?4))`,
+      )
+      .bind(target.id, new Date().toISOString(), userId, JSON.stringify(toMove.map((t) => t.id)))
+      .run()
+  }
+  return { moved: toMove.length, alreadyThere: found.length - toMove.length, accounts }
 }
 
 export async function deleteTransaction(db: Db, userId: string, id: number) {
