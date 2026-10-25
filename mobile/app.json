@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "OpenSpend",
+    "slug": "openspend",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "cl.openspend.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ECFDF5",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "cl.openspend.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-secure-store"
+    ],
+    "scheme": "openspend"
+  }
+}
