@@ -15,7 +15,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply openspend --local",
     "db:migrate:remote": "wrangler d1 migrations apply openspend --remote",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "prepare": "git config core.hooksPath .githooks || true",
+    "test": "vitest run"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.4",
@@ -24,12 +25,14 @@
     "@tanstack/react-query": "^5.104.5",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.13",
+    "jose": "^6.2.13",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.65.0",
+    "@cloudflare/vitest-plugin": "^1.4.7",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
@@ -40,6 +43,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3",
     "vite": "^8.3.4",
+    "vitest": "^5.0.5",
     "wrangler": "^4.152.0"
   },
   "engines": {
