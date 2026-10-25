@@ -4,6 +4,7 @@ import type { accountInput, accountUpdateInput, categoryInput, categoryUpdateInp
 import type {
   AccountWithBalance,
   Category,
+  Connection,
   CreateTransactionsResult,
   Summary,
   Transaction,
@@ -114,3 +115,16 @@ export const useUpdateAccount = () =>
 
 export const useDeleteAccount = () =>
   useApiMutation((id: number) => request<{ deleted: number }>(`/accounts/${id}`, { method: 'DELETE' }))
+
+export const connectionsQuery = queryOptions({
+  queryKey: ['connections'],
+  queryFn: () => request<Connection[]>('/connections'),
+})
+
+export function useRevokeConnection() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => request<{ revoked: string }>(`/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connections'] }),
+  })
+}
