@@ -2,14 +2,176 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenSpend — Tus finanzas, conversando</title>
+    <meta
+      name="description"
+      content="Registro de gastos e ingresos de código fuente disponible que usas desde Claude, ChatGPT u otro asistente de IA. Cuéntale lo que gastaste y queda registrado y clasificado."
+    />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#047857" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenSpend</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="OpenSpend — Tus finanzas, conversando" />
+    <meta
+      property="og:description"
+      content="Registro de gastos con código fuente disponible y compatible con agentes de IA. Cuéntale a tu asistente lo que gastaste y queda registrado."
+    />
+    <meta property="og:image" content="/logo.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
   </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/client/main.tsx"></script>
+  <body class="bg-white text-slate-900 antialiased">
+    <header class="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
+      <a href="/" class="flex items-center gap-2 text-lg font-semibold">
+        <img src="/logo.svg" alt="" class="h-8 w-8" />
+        OpenSpend
+      </a>
+      <nav class="flex items-center gap-1 text-sm">
+        <a href="/conectar/" class="hidden rounded px-3 py-2 text-slate-600 hover:bg-slate-100 sm:inline">Conecta tu asistente</a>
+        <a href="https://github.com/carloxhunter/openspend" class="hidden rounded px-3 py-2 text-slate-600 hover:bg-slate-100 sm:inline">GitHub</a>
+        <a href="/app/" class="rounded bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800">Entrar</a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- Hero -->
+      <section class="bg-gradient-to-b from-emerald-50 to-white">
+        <div class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 md:grid-cols-2 md:py-24">
+          <div>
+            <p class="mb-4 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
+              Código fuente disponible · Compatible con agentes de IA
+            </p>
+            <h1 class="text-4xl font-bold tracking-tight md:text-5xl">Tus finanzas, conversando.</h1>
+            <p class="mt-5 text-lg text-slate-600">
+              OpenSpend es un registro de gastos e ingresos que usas desde Claude, ChatGPT u otro asistente de IA.
+              Cuéntale lo que gastaste, o mándale la foto de la boleta, y queda registrado y clasificado.
+            </p>
+            <div class="mt-8 flex flex-wrap gap-3">
+              <a href="/conectar/" class="rounded-lg bg-emerald-700 px-5 py-3 font-medium text-white hover:bg-emerald-800">Conecta tu asistente</a>
+              <a href="/app/" class="rounded-lg border border-slate-300 px-5 py-3 font-medium text-slate-700 hover:bg-slate-50">Entrar al dashboard</a>
+            </div>
+            <p class="mt-4 text-sm text-slate-500">Por ahora, el acceso es solo por invitación.</p>
+          </div>
+
+          <!-- Conversación de ejemplo -->
+          <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-emerald-900/5" aria-label="Ejemplo de conversación">
+            <div class="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-emerald-700 px-4 py-2 text-sm text-white">
+              Hoy gasté 8 lucas en almuerzo y 4.200 en uber
+            </div>
+            <div class="mt-4 max-w-[95%] rounded-2xl rounded-bl-sm bg-slate-100 px-4 py-3 text-sm">
+              <p class="mb-2">Voy a registrar esto, ¿está bien?</p>
+              <table class="w-full text-left text-xs">
+                <thead class="text-slate-500">
+                  <tr><th class="py-1 font-medium">Descripción</th><th class="font-medium">Monto</th><th class="font-medium">Categoría</th></tr>
+                </thead>
+                <tbody>
+                  <tr class="border-t border-slate-200"><td class="py-1">Almuerzo</td><td>$8.000</td><td>🍽️ Comida</td></tr>
+                  <tr class="border-t border-slate-200"><td class="py-1">Uber</td><td>$4.200</td><td>🚗 Transporte</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="ml-auto mt-4 w-fit rounded-2xl rounded-br-sm bg-emerald-700 px-4 py-2 text-sm text-white">dale</div>
+            <div class="mt-4 w-fit rounded-2xl rounded-bl-sm bg-slate-100 px-4 py-2 text-sm">Listo ✓ Llevas $12.200 gastados hoy.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Por qué -->
+      <section class="mx-auto max-w-6xl px-4 py-16">
+        <h2 class="text-2xl font-bold md:text-3xl">¿Por qué OpenSpend?</h2>
+        <p class="mt-4 max-w-3xl text-slate-600">
+          Registrar gastos a mano es justamente lo que hace que uno deje de hacerlo: abrir la app, elegir categoría,
+          cuenta y fecha por cada café. OpenSpend nació para que registrar sea tan fácil como mandar un mensaje, y para
+          que tus datos sigan siendo tuyos.
+        </p>
+        <div class="mt-10 grid gap-6 md:grid-cols-3">
+          <div class="rounded-xl border border-slate-200 p-6">
+            <p class="text-2xl">💬</p>
+            <h3 class="mt-3 font-semibold">Sin fricción</h3>
+            <p class="mt-2 text-sm text-slate-600">
+              Escribe como hablas: "ayer 5 lucas en café". Tu asistente entiende la fecha, el monto, la moneda y la
+              categoría, y te muestra una vista previa antes de guardar.
+            </p>
+          </div>
+          <div class="rounded-xl border border-slate-200 p-6">
+            <p class="text-2xl">🔐</p>
+            <h3 class="mt-3 font-semibold">Tus datos, aislados</h3>
+            <p class="mt-2 text-sm text-slate-600">
+              Cada usuario ve solo sus datos. Los asistentes acceden con tu autorización explícita y puedes
+              desconectarlos cuando quieras.
+            </p>
+          </div>
+          <div class="rounded-xl border border-slate-200 p-6">
+            <p class="text-2xl">🧩</p>
+            <h3 class="mt-3 font-semibold">Abierto</h3>
+            <p class="mt-2 text-sm text-slate-600">
+              El código es público y usa MCP, un estándar abierto: funciona con Claude, ChatGPT y otros asistentes
+              compatibles, sin atarte a uno.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cómo funciona -->
+      <section class="bg-slate-50">
+        <div class="mx-auto max-w-6xl px-4 py-16">
+          <h2 class="text-2xl font-bold md:text-3xl">Cómo funciona</h2>
+          <ol class="mt-10 grid gap-6 md:grid-cols-3">
+            <li class="rounded-xl bg-white p-6 shadow-sm">
+              <span class="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-sm font-semibold text-white">1</span>
+              <h3 class="mt-4 font-semibold">Conecta tu asistente</h3>
+              <p class="mt-2 text-sm text-slate-600">Pegas una URL en Claude o ChatGPT e inicias sesión. Sin programar y sin API keys.</p>
+            </li>
+            <li class="rounded-xl bg-white p-6 shadow-sm">
+              <span class="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-sm font-semibold text-white">2</span>
+              <h3 class="mt-4 font-semibold">Cuéntale tus gastos</h3>
+              <p class="mt-2 text-sm text-slate-600">Por texto o con la foto de una boleta, desde el computador o el celular.</p>
+            </li>
+            <li class="rounded-xl bg-white p-6 shadow-sm">
+              <span class="grid h-8 w-8 place-items-center rounded-full bg-emerald-700 text-sm font-semibold text-white">3</span>
+              <h3 class="mt-4 font-semibold">Revisa y analiza</h3>
+              <p class="mt-2 text-sm text-slate-600">Confirma la vista previa y mira tus ingresos, gastos y categorías en el dashboard, o pregúntale a tu asistente.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Características -->
+      <section class="mx-auto max-w-6xl px-4 py-16">
+        <h2 class="text-2xl font-bold md:text-3xl">Lo que incluye</h2>
+        <ul class="mt-8 grid gap-x-8 gap-y-5 text-sm md:grid-cols-2">
+          <li class="flex gap-3"><span>💱</span><span><strong>Multimoneda (CLP y USD)</strong>, con el dólar observado del día de cada gasto.</span></li>
+          <li class="flex gap-3"><span>🔁</span><span><strong>Detección de duplicados</strong> al registrar o importar movimientos.</span></li>
+          <li class="flex gap-3"><span>🏷️</span><span><strong>Categorías y cuentas a tu medida</strong>: crea, edita, fusiona categorías y archiva cuentas.</span></li>
+          <li class="flex gap-3"><span>📊</span><span><strong>Resumen mensual</strong> de ingresos, gastos, neto y gastos por categoría.</span></li>
+          <li class="flex gap-3"><span>🤖</span><span><strong>Servidor MCP</strong> compatible con Claude, ChatGPT, Claude Code, Cursor y más.</span></li>
+          <li class="flex gap-3"><span>🛡️</span><span><strong>Seguro por diseño</strong>: acceso por invitación, OAuth 2.1 y datos aislados por usuario.</span></li>
+        </ul>
+      </section>
+
+      <!-- Código fuente y licencia -->
+      <section class="bg-emerald-900 text-white">
+        <div class="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 py-14 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 class="text-2xl font-bold">Código fuente disponible</h2>
+            <p class="mt-2 max-w-2xl text-emerald-100">
+              Revisa cómo funciona, propone mejoras o despliega tu propia instancia para uso personal o sin fines de
+              lucro, gratis. El uso comercial requiere una licencia comercial.
+            </p>
+          </div>
+          <a href="https://github.com/carloxhunter/openspend" class="rounded-lg bg-white px-5 py-3 font-medium text-emerald-900 hover:bg-emerald-50">Ver en GitHub</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-slate-500">
+      <span class="flex items-center gap-2"><img src="/logo.svg" alt="" class="h-5 w-5" /> OpenSpend</span>
+      <span class="flex gap-4">
+        <a href="/conectar/" class="hover:text-slate-800">Conecta tu asistente</a>
+        <a href="https://github.com/carloxhunter/openspend" class="hover:text-slate-800">GitHub</a>
+        <a href="https://github.com/carloxhunter/openspend/blob/main/LICENSE" class="hover:text-slate-800">Licencia</a>
+        <a href="/app/" class="hover:text-slate-800">Entrar</a>
+      </span>
+    </footer>
   </body>
 </html>

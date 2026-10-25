@@ -10,6 +10,7 @@ import {
   useCreateTransactions,
   useDeleteTransaction,
 } from './api'
+import { Connections } from './connections'
 import { currentMonth, monthLabel, monthRange, shiftMonth, today } from './dates'
 import { Button, Card, ErrorText, inputClass } from './ui'
 
@@ -39,6 +40,7 @@ export function Dashboard() {
       </div>
       <QuickAdd />
       <TransactionList from={from} to={to} />
+      <Connections />
     </>
   )
 }

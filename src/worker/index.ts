@@ -14,14 +14,15 @@ const app = new Hono<AuthEnv>()
   .get('/api/me', (c) => c.json({ email: c.get('session').email }))
   .route('/api', api)
   .all('/api/*', (c) => c.json({ error: 'No encontrado' }, 404))
-  // Navegación del dashboard: sin sesión se redirige al login antes de entregar la app, así
-  // nunca se dibuja un dashboard vacío. Con sesión, se sirve la SPA (index.html).
-  .get('*', async (c) => {
+  // La app (/app y sus rutas): sin sesión se redirige al login antes de entregarla, así nunca se
+  // dibuja un dashboard vacío. Con sesión se sirve la SPA (app/index.html) para cualquier ruta
+  // de la app; TanStack Router resuelve la vista en el navegador.
+  .get('/app/*', async (c) => {
     if (!(await getActiveSession(c))) {
       const url = new URL(c.req.url)
       return c.redirect(`/auth/login?${new URLSearchParams({ returnTo: url.pathname + url.search })}`)
     }
-    return c.env.ASSETS.fetch(c.req.raw)
+    return c.env.ASSETS.fetch(new Request(new URL('/app/', c.req.url), c.req.raw))
   })
   .onError((err, c) => {
     if (err instanceof AppError) return c.json({ error: err.message }, err.status)

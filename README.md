@@ -1,6 +1,6 @@
 # 💸 OpenSpend
 
-Registro de gastos e ingresos **open source** y **compatible con agentes de IA**: incluye un
+Registro de gastos e ingresos con **código fuente disponible** y **compatible con agentes de IA**: incluye un
 servidor [MCP](https://modelcontextprotocol.io) para registrar, buscar y analizar tus finanzas
 conversando con Claude (u otro agente), más un dashboard web. Multimoneda (CLP y USD) y
 pensado para desplegarse gratis en Cloudflare.
@@ -20,7 +20,7 @@ Requiere Node 22+ (`nvm use` lee `.nvmrc`) y pnpm.
 nvm use
 pnpm install
 pnpm db:migrate:local   # crea la base local en .wrangler/
-pnpm dev                # http://localhost:5173
+pnpm dev                # landing en http://localhost:5173, app en http://localhost:5173/app/
 ```
 
 | Script | Qué hace |
@@ -131,7 +131,11 @@ de desarrollo.
 ## Estructura
 
 ```
+index.html           Landing pública (HTML estático)
+conectar/index.html  Cómo conectar un asistente (HTML estático)
+app/index.html       Entrada de la app (SPA en /app)
 src/
+  site/              CSS y script mínimo de las páginas públicas
   client/            React: rutas (TanStack Router), layout, dashboard, categorías y cuentas
   worker/
     api/             Rutas REST (Hono)
@@ -154,9 +158,12 @@ test/                Tests de aislamiento entre usuarios
   activa (la que se usa por defecto).
 - **Duplicados**: mismo monto, moneda, tipo y cuenta dentro de ±2 días. Se marcan (`possibleDuplicateOf`) o se omiten con `skipDuplicates`.
 - **Operaciones masivas** usan un único parámetro JSON + `json_each()` para respetar los límites de D1 del plan gratis.
+- **Páginas públicas estáticas**: la landing (`/`) y `/conectar` son HTML generado por Vite (multipágina) y se
+  sirven directo desde la red de Cloudflare, sin pasar por el Worker ni requerir JavaScript (la landing no carga JS).
+  La app vive en `/app` y es la única que exige sesión.
 - **Sin parpadeos al cargar**: el Worker exige sesión antes de entregar la app (si no hay, redirige al login) y los
   loaders de TanStack Router precargan los datos en TanStack Query antes de dibujar cada ruta. El estado de la vista
-  (ej. el mes) vive en la URL (`/?mes=2026-10`).
+  (ej. el mes) vive en la URL (`/app/?mes=2026-10`).
 - **Multiusuario**: todas las tablas con datos financieros tienen `user_id`; cada servicio recibe el usuario
   explícitamente y valida que las cuentas, categorías y lotes referenciados le pertenezcan (las claves foráneas solo
   garantizan que existan). Los tests en `test/` verifican el aislamiento.
@@ -178,7 +185,18 @@ test/                Tests de aislamiento entre usuarios
 - [x] Multiusuario por invitación con Auth0
 - [x] Gestión de categorías (con fusión) y cuentas (con archivado)
 - [x] Página "Conecta tu asistente" con revocación de accesos
+- [x] Landing pública y página pública de conexión
+- [ ] Ajustes del usuario (asistentes conectados, preferencias)
 - [ ] Importador desde otras apps de finanzas (CSV) y lotes de importación reversibles
 - [ ] Registro rápido en lenguaje natural dentro del dashboard (Workers AI), con cuota por usuario
 - [ ] Carga de cartolas bancarias
 - [ ] Gráficos y presupuestos por categoría
+
+## Licencia
+
+OpenSpend se distribuye bajo la [PolyForm Noncommercial License 1.0.0](LICENSE): puedes usar, estudiar, modificar y
+desplegar el código **sin fines comerciales** (uso personal, educativo, investigación u organizaciones sin fines de
+lucro). Es *source-available*, no "open source" en el sentido de la OSI.
+
+**Uso comercial** (ofrecerlo como servicio, integrarlo en un producto o usarlo dentro de una empresa con fines de
+lucro) requiere una licencia comercial. Para solicitarla, [abre un issue](https://github.com/carloxhunter/openspend/issues).

@@ -15,11 +15,18 @@ async function sessionCookie() {
 
 describe('navegación', () => {
   it('redirige al login antes de entregar la app, conservando la ruta', async () => {
-    const res = await SELF.fetch('http://localhost/?mes=2026-09', { redirect: 'manual' })
+    const res = await SELF.fetch('http://localhost/app/categorias?mes=2026-09', { redirect: 'manual' })
     expect(res.status).toBe(302)
     const location = new URL(res.headers.get('Location')!, 'http://localhost')
     expect(location.pathname).toBe('/auth/login')
-    expect(location.searchParams.get('returnTo')).toBe('/?mes=2026-09')
+    expect(location.searchParams.get('returnTo')).toBe('/app/categorias?mes=2026-09')
+  })
+
+  it('el login sin destino lleva a la app', async () => {
+    const res = await SELF.fetch('http://localhost/auth/login', { redirect: 'manual' })
+    const cookie = res.headers.get('Set-Cookie')!
+    const payload = JSON.parse(atob(cookie.split('=')[1].split('.')[0].replace(/-/g, '+').replace(/_/g, '/')))
+    expect(payload.returnTo).toBe('/app')
   })
 
   it('una ruta de API inexistente responde 404 en JSON, no la app', async () => {

@@ -154,7 +154,7 @@ describe('usuarios suspendidos', () => {
     await env.DB.prepare("UPDATE users SET suspended_at = '2026-10-25T00:00:00Z' WHERE id = ?").bind(ALICE.id).run()
     expect(await isActiveUser(env.DB, ALICE.id)).toBe(false)
     expect((await SELF.fetch('http://localhost/api/me', alice)).status).toBe(401)
-    const nav = await SELF.fetch('http://localhost/', { ...alice, redirect: 'manual' })
+    const nav = await SELF.fetch('http://localhost/app/', { ...alice, redirect: 'manual' })
     expect(nav.status).toBe(302)
 
     await env.DB.prepare('UPDATE users SET suspended_at = NULL WHERE id = ?').bind(ALICE.id).run()

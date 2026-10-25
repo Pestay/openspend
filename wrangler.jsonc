@@ -8,10 +8,10 @@
   "observability": { "enabled": true },
   "assets": {
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    // Todo pasa por el Worker (que exige sesión antes de entregar la app) salvo los archivos
-    // estáticos con hash y los logos, que se sirven directo desde la red de Cloudflare.
-    "run_worker_first": ["/*", "!/assets/*", "!/logo.svg", "!/logo.png", "!/apple-touch-icon.png"]
+    // Páginas públicas (landing, /conectar) y archivos estáticos se sirven directo desde la red de
+    // Cloudflare, sin pasar por el Worker. La app (/app) pasa por el Worker, que exige sesión.
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/app", "/app/*", "/api/*", "/auth/*", "/authorize", "/oauth/*", "/mcp", "/mcp/*", "/.well-known/*"]
   },
   "vars": {
     // Se sobrescribe en .dev.vars para desarrollo local.

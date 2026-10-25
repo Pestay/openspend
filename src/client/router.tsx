@@ -4,7 +4,6 @@ import { z } from 'zod'
 import { accountsQuery, categoriesQuery, connectionsQuery, meQuery, summaryQuery, transactionsQuery } from './api'
 import { AccountsPage } from './accounts-page'
 import { CategoriesPage } from './categories-page'
-import { ConnectPage } from './connect-page'
 import { Dashboard, DashboardSkeleton } from './dashboard'
 import { currentMonth, monthRange } from './dates'
 import { ErrorScreen, RootLayout, Splash } from './layout'
@@ -40,6 +39,7 @@ const dashboardRoute = createRoute({
       queryClient.ensureQueryData(summaryQuery(from, to)),
       queryClient.ensureQueryData(transactionsQuery(from, to)),
       queryClient.ensureQueryData(accountsQuery),
+      queryClient.ensureQueryData(connectionsQuery),
     ])
   },
   component: Dashboard,
@@ -60,18 +60,13 @@ const accountsRoute = createRoute({
   component: AccountsPage,
 })
 
-const connectRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/conectar',
-  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(connectionsQuery),
-  component: ConnectPage,
-})
-
-const routeTree = rootRoute.addChildren([dashboardRoute, categoriesRoute, accountsRoute, connectRoute])
+const routeTree = rootRoute.addChildren([dashboardRoute, categoriesRoute, accountsRoute])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({
     routeTree,
+    // La app vive en /app; la raíz y /conectar son páginas públicas estáticas.
+    basepath: '/app',
     context: { queryClient },
     // Precarga la ruta al pasar el mouse por un link (ej. cambiar de mes es instantáneo).
     defaultPreload: 'intent',

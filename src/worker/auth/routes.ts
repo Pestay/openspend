@@ -58,8 +58,9 @@ form{display:flex;gap:.5rem;margin-top:1.5rem}.warn{color:#b45309}
 <main><header><img src="/logo.svg" alt="">OpenSpend</header>${body}</main></html>`
 }
 
+// Destino tras el login: solo rutas internas; por defecto, la app.
 function safeReturnTo(value: string | undefined): string {
-  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/'
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/app'
 }
 
 function loginRedirect(c: { req: { url: string } }) {
