@@ -32,6 +32,23 @@ pnpm dev                # http://localhost:5173
 | `pnpm cf-typegen` | Regenera tipos de bindings tras cambiar `wrangler.jsonc` |
 | `pnpm run deploy` | Build y despliegue a Cloudflare (`pnpm deploy` a secas es otro comando de pnpm) |
 
+## Despliegue (GitHub Actions)
+
+El workflow [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml):
+
+- **En cada PR y push**: typecheck, lint, build y escaneo de secretos con gitleaks.
+- **En `main`** (si lo anterior pasa): aplica las migraciones de D1 y despliega el Worker.
+
+Configuración necesaria en GitHub → Settings → Environments → `production` (restringido a `main`):
+
+| Nombre | Tipo | Valor |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | Secret | Token de Cloudflare con la plantilla *Edit Cloudflare Workers* + permiso *D1: Edit* |
+| `CLOUDFLARE_ACCOUNT_ID` | Variable | ID de la cuenta de Cloudflare |
+
+Los secretos de la app (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `SESSION_SECRET`, `ALLOWED_GITHUB_USER_ID`)
+se configuran una vez con `wrangler secret put` y se mantienen entre despliegues.
+
 ## Estructura
 
 ```
