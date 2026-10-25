@@ -1,0 +1,55 @@
+# Verificaciones de cada PR y de cada commit que llega a main. Los checks de main son los que
+# deploy.yml exige antes de desplegar un tag, así nunca se despliega un commit sin verificar.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # En PRs se cancela la ejecución anterior; en main se completan todas (las usa el deploy).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Cada verificación es un check independiente (y obligatorio para mergear a main).
+  check:
+    name: ${{ matrix.check.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Si una falla, las demás siguen para mostrar todos los problemas de una vez.
+      fail-fast: false
+      matrix:
+        check:
+          - { name: Typecheck, run: pnpm typecheck }
+          - { name: Lint, run: pnpm lint }
+          - { name: Tests, run: pnpm test }
+          - { name: Build, run: pnpm build }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: ${{ matrix.check.run }}
+
+  secret-scan:
+    name: Secretos (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

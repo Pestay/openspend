@@ -1,0 +1,83 @@
+# Despliegue a producción al crear un tag de versión (ej. v0.4.0) sobre main. No vuelve a
+# correr los checks: exige que el commit ya los haya pasado en el workflow CI de main.
+name: Deploy
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Desplegar a Cloudflare
+    runs-on: ubuntu-latest
+    # El token de Cloudflare vive en este environment, que solo aceptan los tags v*.
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Verificar que el tag apunta a un commit de main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::El tag $GITHUB_REF_NAME no apunta a un commit de main. Solo se despliega desde main."
+            exit 1
+          fi
+      - name: Verificar que el commit pasó los checks de CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUIRED: '["Typecheck","Lint","Tests","Build","Secretos (gitleaks)"]'
+        run: |
+          # Si el tag se creó justo después del merge, los checks de main pueden seguir corriendo:
+          # se espera hasta 15 minutos. Se usa la ejecución más reciente de cada check (re-runs).
+          for attempt in $(seq 1 45); do
+            states=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" --jq '.check_runs' |
+              jq -r --argjson required "$REQUIRED" '
+                . as $runs | $required[] as $name
+                | ([$runs[] | select(.name == $name)] | sort_by(.started_at) | last) as $run
+                | if $run == null then "pendiente  \($name) (aún no aparece)"
+                  elif $run.status != "completed" then "pendiente  \($name)"
+                  elif $run.conclusion == "success" then "ok         \($name)"
+                  else "falló      \($name) (\($run.conclusion))" end')
+            echo "$states"
+            if grep -q '^falló' <<<"$states"; then
+              echo "::error::El commit tiene checks fallidos en CI. Corrige en un PR y crea un tag nuevo."
+              exit 1
+            fi
+            if ! grep -q '^pendiente' <<<"$states"; then
+              echo "Todos los checks pasaron."
+              exit 0
+            fi
+            echo "Esperando checks… ($attempt/45)"
+            sleep 20
+          done
+          echo "::error::Los checks de CI no terminaron a tiempo."
+          exit 1
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Verificar que el tag coincide con la versión de package.json
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::El tag $GITHUB_REF_NAME no coincide con la versión de package.json ($expected)."
+            exit 1
+          fi
+      - run: pnpm install --frozen-lockfile
+      - name: Aplicar migraciones de D1
+        run: pnpm db:migrate:remote
+      - name: Desplegar Worker
+        run: pnpm run deploy
