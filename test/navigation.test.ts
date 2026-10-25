@@ -1,6 +1,10 @@
 import { env, SELF } from 'cloudflare:test'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { base64url, sign } from '../src/worker/auth/session'
+import { ensureUser } from '../src/worker/services/users'
+
+// Las sesiones solo valen para usuarios registrados y activos.
+beforeEach(() => ensureUser(env.DB, { id: 'auth0|nav', email: 'nav@example.com' }))
 
 async function sessionCookie() {
   const payload = base64url(
