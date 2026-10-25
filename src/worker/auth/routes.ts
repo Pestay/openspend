@@ -38,11 +38,18 @@ const escape = (value: string) => value.replace(/[&<>"']/g, (char) => `&#${char.
 
 function page(title: string, body: string) {
   return `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escape(title)}</title>
-<style>body{font-family:system-ui,sans-serif;max-width:28rem;margin:4rem auto;padding:0 1rem;color:#0f172a;background:#f8fafc}
-button{padding:.5rem 1rem;border-radius:.5rem;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-size:1rem}
-button.primary{background:#0f172a;color:#fff;border-color:#0f172a}.warn{color:#b45309}</style>
-<body>${body}</body></html>`
+<title>${escape(title)} · OpenSpend</title><link rel="icon" type="image/svg+xml" href="/logo.svg">
+<style>
+body{font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;padding:1rem;color:#0f172a;
+  background:linear-gradient(160deg,#ecfdf5,#f8fafc 60%)}
+main{background:#fff;max-width:26rem;width:100%;padding:2rem;border-radius:1rem;box-shadow:0 10px 30px rgb(15 23 42/.08)}
+header{display:flex;align-items:center;gap:.5rem;font-weight:600;margin-bottom:1rem}header img{width:2rem;height:2rem}
+h1{font-size:1.25rem;margin:.5rem 0 1rem}a{color:#047857}
+button{padding:.6rem 1.1rem;border-radius:.6rem;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-size:1rem}
+button.primary{background:#047857;color:#fff;border-color:#047857}button.primary:hover{background:#065f46}
+form{display:flex;gap:.5rem;margin-top:1.5rem}.warn{color:#b45309}
+</style>
+<main><header><img src="/logo.svg" alt="">OpenSpend</header>${body}</main></html>`
 }
 
 function safeReturnTo(value: string | undefined): string {
