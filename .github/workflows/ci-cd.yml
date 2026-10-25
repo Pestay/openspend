@@ -75,6 +75,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - name: Verificar que el tag coincide con la versión de package.json
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::El tag $GITHUB_REF_NAME no coincide con la versión de package.json ($expected)."
+            exit 1
+          fi
       - run: pnpm install --frozen-lockfile
       - name: Aplicar migraciones de D1
         run: pnpm db:migrate:remote
