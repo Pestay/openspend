@@ -92,6 +92,18 @@ invitado a una no da acceso a otra.
    }
    ```
 
+**Marca del login (Universal Login):**
+
+- *Branding → Universal Login → Customization Editor*:
+  - Logo: `https://<tu-dominio>/logo.png`
+  - Primary color: `#047857` · Page background: `#ecfdf5`
+  - Widget corner radius: `16px` · Button border radius: `10px`
+- *Settings → General → Languages*: idioma por defecto **Spanish (es)**.
+- *Branding → Universal Login → Custom Text* (pantalla `login`, idioma `es`): título "Inicia sesión en OpenSpend",
+  descripción "Usa el email con el que fuiste invitado".
+
+La marca de Universal Login es del tenant: si otra app comparte el tenant, verá el mismo login.
+
 **Invitar a alguien:**
 
 1. *User Management → Users → Create User* con su email (conexión Username-Password-Authentication) y una

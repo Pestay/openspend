@@ -38,7 +38,10 @@ export function App() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
         <header className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold">💸 OpenSpend</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold">
+            <img src="/logo.svg" alt="" className="h-8 w-8" />
+            OpenSpend
+          </h1>
           <UserMenu />
           <div className="flex items-center gap-2">
             <button className="rounded px-2 py-1 hover:bg-slate-200" onClick={() => setMonth(shiftMonth(month, -1))}>
@@ -199,7 +202,7 @@ function QuickAdd() {
         </select>
         <input className={`${input} min-w-40 flex-1`} name="description" placeholder="Descripción" />
         <button
-          className="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          className="rounded bg-emerald-700 px-3 py-1.5 text-sm text-white hover:bg-emerald-800 disabled:opacity-50"
           disabled={create.isPending}
         >
           Guardar
