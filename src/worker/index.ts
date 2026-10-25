@@ -3,6 +3,7 @@ import { createMcpHandler } from '@modelcontextprotocol/server'
 import { Hono } from 'hono'
 import { api } from './api'
 import { authRoutes, requireSession, type AuthEnv, type McpProps } from './auth/routes'
+import { getSession } from './auth/session'
 import { AppError } from './errors'
 import { buildMcpServer } from './mcp/server'
 import { userExists } from './services/users'
@@ -13,6 +14,16 @@ const app = new Hono<AuthEnv>()
   .use('/api/*', requireSession)
   .get('/api/me', (c) => c.json({ email: c.get('session').email }))
   .route('/api', api)
+  .all('/api/*', (c) => c.json({ error: 'No encontrado' }, 404))
+  // Navegación del dashboard: sin sesión se redirige al login antes de entregar la app, así
+  // nunca se dibuja un dashboard vacío. Con sesión, se sirve la SPA (index.html).
+  .get('*', async (c) => {
+    if (!(await getSession(c))) {
+      const url = new URL(c.req.url)
+      return c.redirect(`/auth/login?${new URLSearchParams({ returnTo: url.pathname + url.search })}`)
+    }
+    return c.env.ASSETS.fetch(c.req.raw)
+  })
   .onError((err, c) => {
     if (err instanceof AppError) return c.json({ error: err.message }, err.status)
     if (err.message.includes('FOREIGN KEY constraint failed')) {
