@@ -93,6 +93,10 @@ invitado a una no da acceso a otra.
      api.idToken.setCustomClaim(`https://${app}/invited`, true)
    }
    ```
+4. *(Opcional, app móvil)* *Applications → Create Application → Native*: Callback y Logout URL `openspend://callback`,
+   metadata `app` = `openspend`, grant types Authorization Code y Refresh Token. Su Client ID va en el secreto
+   `AUTH0_NATIVE_CLIENT_ID`; con él, `/api/*` acepta también `Authorization: Bearer <ID token>` de esa app. Sin él,
+   la API solo acepta la cookie del dashboard.
 
 **Marca del login (Universal Login):**
 

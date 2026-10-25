@@ -10,3 +10,6 @@ AUTH0_CLIENT_SECRET=
 
 # Firma de cookies de sesión y consentimiento. Generar con: openssl rand -base64 32
 SESSION_SECRET=
+
+# Opcional: Client ID de la Native app de Auth0 (app móvil). Sin él, la API solo acepta la cookie.
+# AUTH0_NATIVE_CLIENT_ID=
