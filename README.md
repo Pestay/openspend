@@ -45,7 +45,9 @@ Para publicar una versión:
 gh release create v0.2.0 --target main --generate-notes
 ```
 
-Esto crea el tag y una release con las notas generadas desde los PRs. Si el tag no apunta a un commit de `main`, el despliegue se rechaza.
+Esto crea el tag y una release con las notas generadas desde los PRs. El despliegue se rechaza si el tag no apunta
+a un commit de `main` o si no coincide con `version` de `package.json` (actualízala en el PR antes de publicar).
+Al abrir la app, la consola del navegador muestra la versión y el commit que están corriendo.
 
 Configuración necesaria en GitHub → Settings → Environments → `production` (restringido a tags `v*`):
 
