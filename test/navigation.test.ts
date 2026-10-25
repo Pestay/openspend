@@ -24,3 +24,14 @@ describe('navegación', () => {
     expect(await res.json()).toEqual({ error: 'No encontrado' })
   })
 })
+
+describe('asistentes conectados', () => {
+  it('lista vacía para un usuario sin conexiones y 404 al revocar una ajena o inexistente', async () => {
+    const cookie = { Cookie: await sessionCookie() }
+    const list = await SELF.fetch('http://localhost/api/connections', { headers: cookie })
+    expect(list.status).toBe(200)
+    expect(await list.json()).toEqual([])
+    const revoke = await SELF.fetch('http://localhost/api/connections/no-existe', { method: 'DELETE', headers: cookie })
+    expect(revoke.status).toBe(404)
+  })
+})
