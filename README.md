@@ -166,6 +166,9 @@ test/                Tests de aislamiento entre usuarios
 - [x] MCP remoto para Claude (registrar, buscar, editar, resúmenes)
 - [x] Autenticación (OAuth 2.1 para el MCP)
 - [x] Multiusuario por invitación con Auth0
+- [x] Gestión de categorías (con fusión) y cuentas (con archivado)
+- [x] Página "Conecta tu asistente" con revocación de accesos
 - [ ] Importador desde otras apps de finanzas (CSV) y lotes de importación reversibles
+- [ ] Registro rápido en lenguaje natural dentro del dashboard (Workers AI), con cuota por usuario
 - [ ] Carga de cartolas bancarias
 - [ ] Gráficos y presupuestos por categoría
