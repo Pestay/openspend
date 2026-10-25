@@ -52,6 +52,13 @@ export const updateTransactionInput = z
   })
   .partial()
 
+// Mover movimientos a otra cuenta; dryRun solo calcula el efecto en los saldos.
+export const moveTransactionsInput = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+  accountId: z.number().int().positive(),
+  dryRun: z.boolean().default(false),
+})
+
 export const listTransactionsQuery = z.object({
   from: isoDate.optional(),
   to: isoDate.optional(),

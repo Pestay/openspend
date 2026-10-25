@@ -15,6 +15,7 @@ import {
   mergeCategoriesInput,
   reconcileInput,
   listTransactionsQuery,
+  moveTransactionsInput,
   summaryQuery,
   updateTransactionInput,
 } from '../../shared/schemas'
@@ -33,6 +34,7 @@ import {
   createTransactions,
   deleteTransaction,
   listTransactions,
+  moveTransactions,
   updateTransaction,
 } from '../services/transactions'
 import { validate } from './validate'
@@ -128,6 +130,9 @@ export const api = new Hono<AuthEnv>()
   })
   .post('/transactions', validate('json', createTransactionsInput), async (c) =>
     c.json(await createTransactions(getDb(c.env.DB), c.env.DB, c.get('session').userId, c.req.valid('json')), 201),
+  )
+  .post('/transactions/move', validate('json', moveTransactionsInput), async (c) =>
+    c.json(await moveTransactions(c.env.DB, c.get('session').userId, c.req.valid('json'))),
   )
   .patch('/transactions/:id', validate('param', idParam), validate('json', updateTransactionInput), async (c) => {
     const updated = await updateTransaction(

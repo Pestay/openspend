@@ -14,6 +14,7 @@ import {
   listTransactionsQuery,
   summaryQuery,
   updateTransactionInput,
+  moveTransactionsInput,
 } from '../../shared/schemas'
 import type { Transaction } from '../../shared/types'
 import { getDb, todayInChile } from '../db'
@@ -24,7 +25,7 @@ import { listImports, revertImport } from '../services/imports'
 import { deleteReconciliation, listReconciliations, previewReconciliation, reconcile } from '../services/reconciliations'
 import { getUsdClpRates } from '../services/fx'
 import { getAccountsWithBalance, getSummary } from '../services/summary'
-import { createTransactions, deleteTransaction, listTransactions, updateTransaction } from '../services/transactions'
+import { createTransactions, deleteTransaction, listTransactions, moveTransactions, updateTransaction } from '../services/transactions'
 
 const INSTRUCTIONS = `OpenSpend: registro de gastos e ingresos personales (Chile, montos en CLP y USD).
 
@@ -41,7 +42,8 @@ Flujo recomendado:
 4. Después de registrar, confirma brevemente qué quedó guardado. Si add_transactions reporta duplicados, pregunta
    al usuario antes de borrar o volver a insertar.
 5. Para correcciones ("el uber era trabajo") usa search_transactions, muestra el cambio propuesto y, tras la
-   confirmación, update_transaction. Para borrar, confirma siempre antes de delete_transaction.
+   confirmación, update_transaction. Para pasar varios movimientos a otra cuenta usa move_transactions (primero
+   con dryRun=true para mostrar los saldos antes/después). Para borrar, confirma siempre antes de delete_transaction.
 6. Categorías y cuentas se administran con create/update/delete_category y create/update/delete_account, siempre
    con confirmación previa. Para fusionar categorías usa delete_category con reassignTo. Las cuentas con
    movimientos no se eliminan: se archivan (update_account con archived=true). Para juntar varias categorías en
@@ -192,6 +194,28 @@ export function buildMcpServer(env: Env, userId: string) {
         const updated = await updateTransaction(db, env.DB, userId, id, patch)
         if (!updated) throw new AppError('Transacción no encontrada', 404)
         return (await describe([updated as Transaction]))[0]
+      }),
+  )
+
+  server.registerTool(
+    'move_transactions',
+    {
+      title: 'Mover movimientos a otra cuenta',
+      description:
+        'Mueve uno o varios movimientos (máx. 500) a otra cuenta. Primero llama con dryRun=true y muestra al usuario el saldo antes/después de cada cuenta; si una cuenta tiene anchoredCount > 0, explica que esos movimientos son anteriores a su última conciliación y no cambian su saldo actual. Llama con dryRun=false solo cuando el usuario confirme.',
+      inputSchema: moveTransactionsInput,
+    },
+    (input) =>
+      run(async () => {
+        const result = await moveTransactions(env.DB, userId, input)
+        return {
+          ...result,
+          accounts: result.accounts.map((a) => ({
+            ...a,
+            before: formatMoney(a.beforeMinor, a.currency),
+            after: formatMoney(a.afterMinor, a.currency),
+          })),
+        }
       }),
   )
 

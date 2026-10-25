@@ -108,6 +108,30 @@ export async function accountsWithReconciledBalance(d1: D1Database, userId: stri
   )
 }
 
+/**
+ * Saldo actual de cada cuenta, antes y después de sumar variaciones hipotéticas (ej. mover
+ * movimientos de cuenta). Respeta las anclas: lo anterior a la última conciliación no cambia
+ * el saldo actual de esa cuenta.
+ */
+export async function balancesWithDeltas(d1: D1Database, userId: string, extra: (Delta & { accountId: number })[]) {
+  const { states } = await loadStates(d1, userId)
+  return new Map(
+    [...states].map(([id, state]) => {
+      const added = extra.filter((d) => d.accountId === id)
+      return [
+        id,
+        {
+          name: state.account.name,
+          currency: state.account.currency as Currency,
+          beforeMinor: currentBalance(state),
+          afterMinor: currentBalance({ ...state, deltas: [...state.deltas, ...added] }),
+          lastReconciliationDate: state.anchors.at(-1)?.date ?? null,
+        },
+      ]
+    }),
+  )
+}
+
 async function ownedAccount(db: Db, userId: string, accountId: number) {
   const [account] = await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, userId)))
   if (!account) throw new AppError(`La cuenta ${accountId} no existe`, 404)
