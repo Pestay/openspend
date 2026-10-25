@@ -1,0 +1,10 @@
+#!/bin/sh
+# Bloquea el commit si gitleaks detecta secretos en los cambios staged.
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "⚠️  gitleaks no está instalado (brew install gitleaks). Commit bloqueado por seguridad."
+  exit 1
+fi
+gitleaks git --staged --redact --no-banner || {
+  echo "❌ gitleaks encontró posibles secretos. Revisa los cambios antes de commitear."
+  exit 1
+}
