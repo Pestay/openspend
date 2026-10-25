@@ -64,7 +64,8 @@ export async function getAccountsWithBalance(d1: D1Database, userId: string): Pr
          a.initial_balance_minor + COALESCE(SUM(m.sign * CASE
            WHEN m.currency = a.currency THEN m.amount_minor
            ELSE m.amount_clp
-         END), 0) AS balanceMinor
+         END), 0) AS balanceMinor,
+         COUNT(m.account) AS transactionCount
        FROM accounts a LEFT JOIN movements m ON m.account = a.id
        WHERE a.user_id = ?1
        GROUP BY a.id ORDER BY a.archived, a.id`,

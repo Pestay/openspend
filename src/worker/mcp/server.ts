@@ -2,9 +2,12 @@ import { McpServer, type CallToolResult } from '@modelcontextprotocol/server'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { accounts, categories } from '../../../db/schema'
-import { formatMoney, toMinor } from '../../shared/money'
+import { formatMoney } from '../../shared/money'
 import {
   accountInput,
+  accountUpdateInput,
+  categoryInput,
+  categoryUpdateInput,
   createTransactionsInput,
   listTransactionsQuery,
   summaryQuery,
@@ -13,6 +16,8 @@ import {
 import type { Transaction } from '../../shared/types'
 import { getDb, todayInChile } from '../db'
 import { AppError } from '../errors'
+import { createAccount, deleteAccount, updateAccount } from '../services/accounts'
+import { createCategory, deleteCategory, listCategories, updateCategory } from '../services/categories'
 import { getUsdClpRates } from '../services/fx'
 import { getAccountsWithBalance, getSummary } from '../services/summary'
 import { createTransactions, deleteTransaction, listTransactions, updateTransaction } from '../services/transactions'
@@ -33,6 +38,9 @@ Flujo recomendado:
    al usuario antes de borrar o volver a insertar.
 5. Para correcciones ("el uber era trabajo") usa search_transactions, muestra el cambio propuesto y, tras la
    confirmación, update_transaction. Para borrar, confirma siempre antes de delete_transaction.
+6. Categorías y cuentas se administran con create/update/delete_category y create/update/delete_account, siempre
+   con confirmación previa. Para fusionar categorías usa delete_category con reassignTo. Las cuentas con
+   movimientos no se eliminan: se archivan (update_account con archived=true).
 
 Los montos se envían en unidades normales (12990, 9.99), no en centavos.`
 
@@ -91,7 +99,8 @@ export function buildMcpServer(env: Env, userId: string) {
     'get_context',
     {
       title: 'Contexto',
-      description: 'Fecha de hoy en Chile, cuentas con saldo y categorías disponibles (con IDs). Llamar al inicio.',
+      description:
+        'Fecha de hoy en Chile, cuentas con saldo y categorías (con IDs y cantidad de movimientos). Llamar al inicio.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
@@ -100,11 +109,21 @@ export function buildMcpServer(env: Env, userId: string) {
         today: todayInChile(),
         accounts: (await getAccountsWithBalance(env.DB, userId))
           .filter((a) => !a.archived)
-          .map((a) => ({ id: a.id, name: a.name, type: a.type, currency: a.currency, balance: formatMoney(a.balanceMinor, a.currency) })),
-        categories: await db
-          .select({ id: categories.id, name: categories.name, kind: categories.kind })
-          .from(categories)
-          .where(eq(categories.userId, userId)),
+          .map((a) => ({
+            id: a.id,
+            name: a.name,
+            type: a.type,
+            currency: a.currency,
+            balance: formatMoney(a.balanceMinor, a.currency),
+            transactions: a.transactionCount,
+          })),
+        categories: (await listCategories(env.DB, userId)).map((c) => ({
+          id: c.id,
+          name: c.name,
+          kind: c.kind,
+          icon: c.icon,
+          transactions: c.transactionCount,
+        })),
       })),
   )
 
@@ -213,31 +232,67 @@ export function buildMcpServer(env: Env, userId: string) {
     'create_category',
     {
       title: 'Crear categoría',
-      description: 'Crea una categoría nueva. Pregunta al usuario antes de crearla.',
-      inputSchema: z.object({
-        name: z.string().trim().min(1).max(100),
-        kind: z.enum(['expense', 'income']),
-        icon: z.string().max(8).optional(),
-      }),
+      description: 'Crea una categoría. Úsala solo después de que el usuario confirme nombre, tipo e ícono.',
+      inputSchema: categoryInput,
     },
-    (input) => run(async () => (await db.insert(categories).values({ ...input, userId }).returning())[0]),
+    (input) => run(() => createCategory(db, userId, input)),
+  )
+
+  server.registerTool(
+    'update_category',
+    {
+      title: 'Editar categoría',
+      description:
+        'Cambia el nombre, ícono o color (#RRGGBB) de una categoría. El tipo (gasto/ingreso) no se puede cambiar. Úsala solo después de que el usuario confirme el cambio.',
+      inputSchema: categoryUpdateInput.extend({ id: z.number().int().positive() }),
+    },
+    ({ id, ...patch }) => run(() => updateCategory(db, userId, id, patch)),
+  )
+
+  server.registerTool(
+    'delete_category',
+    {
+      title: 'Eliminar o fusionar categoría',
+      description:
+        'Elimina una categoría. Si tiene movimientos, reassignTo indica a qué categoría del mismo tipo moverlos (sirve para fusionar categorías) o null para dejarlos sin categoría; sin reassignTo falla e informa cuántos movimientos tiene. Confirma con el usuario antes de usarla.',
+      inputSchema: z.object({ id: z.number().int().positive(), reassignTo: z.number().int().positive().nullable().optional() }),
+      annotations: { destructiveHint: true },
+    },
+    ({ id, reassignTo }) => run(() => deleteCategory(env.DB, db, userId, id, reassignTo)),
   )
 
   server.registerTool(
     'create_account',
     {
       title: 'Crear cuenta',
-      description: 'Crea una cuenta (banco, efectivo, tarjeta de crédito, ahorro, inversión) en CLP o USD.',
+      description:
+        'Crea una cuenta (banco, efectivo, tarjeta de crédito, ahorro, inversión) en CLP o USD. Úsala solo después de que el usuario confirme.',
       inputSchema: accountInput,
     },
-    ({ initialBalance, ...data }) =>
-      run(async () => {
-        const [account] = await db
-          .insert(accounts)
-          .values({ ...data, userId, initialBalanceMinor: toMinor(initialBalance, data.currency) })
-          .returning()
-        return account
-      }),
+    (input) => run(() => createAccount(db, userId, input)),
+  )
+
+  server.registerTool(
+    'update_account',
+    {
+      title: 'Editar o archivar cuenta',
+      description:
+        'Cambia nombre, tipo o saldo inicial de una cuenta, o la archiva (archived=true) para ocultarla sin perder su historial. La moneda no se puede cambiar. Úsala solo después de que el usuario confirme.',
+      inputSchema: accountUpdateInput.extend({ id: z.number().int().positive() }),
+    },
+    ({ id, ...patch }) => run(() => updateAccount(db, userId, id, patch)),
+  )
+
+  server.registerTool(
+    'delete_account',
+    {
+      title: 'Eliminar cuenta',
+      description:
+        'Elimina una cuenta sin movimientos. Si tiene movimientos falla: en ese caso propón archivarla con update_account. Confirma con el usuario antes de usarla.',
+      inputSchema: z.object({ id: z.number().int().positive() }),
+      annotations: { destructiveHint: true },
+    },
+    ({ id }) => run(() => deleteAccount(env.DB, db, userId, id)),
   )
 
   return server

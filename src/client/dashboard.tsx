@@ -11,6 +11,7 @@ import {
   useDeleteTransaction,
 } from './api'
 import { currentMonth, monthLabel, monthRange, shiftMonth, today } from './dates'
+import { Button, Card, ErrorText, inputClass } from './ui'
 
 const clp = (n: number) => formatMoney(n, 'CLP')
 
@@ -60,15 +61,6 @@ export function DashboardSkeleton() {
       <div className={`${block} h-28`} />
       <div className={`${block} h-64`} />
     </div>
-  )
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-sm font-medium text-slate-500">{title}</h2>
-      {children}
-    </section>
   )
 }
 
@@ -163,7 +155,7 @@ function QuickAdd() {
   }
 
   const options = categories.filter((c) => c.kind === kind)
-  const input = 'rounded border border-slate-300 px-2 py-1.5 text-sm'
+  const input = inputClass
 
   return (
     <Card title="Agregar movimiento">
@@ -187,14 +179,9 @@ function QuickAdd() {
           ))}
         </select>
         <input className={`${input} min-w-40 flex-1`} name="description" placeholder="Descripción" />
-        <button
-          className="rounded bg-emerald-700 px-3 py-1.5 text-sm text-white hover:bg-emerald-800 disabled:opacity-50"
-          disabled={create.isPending}
-        >
-          Guardar
-        </button>
+        <Button disabled={create.isPending}>Guardar</Button>
       </form>
-      {create.error && <p className="mt-2 text-sm text-rose-600">{create.error.message}</p>}
+      <ErrorText error={create.error} />
       {warning && <p className="mt-2 text-sm text-amber-600">{warning}</p>}
     </Card>
   )

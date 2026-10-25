@@ -122,7 +122,7 @@ su fila en la tabla `users` (eso **elimina todos sus datos**).
 
 ```
 src/
-  client/            React: rutas (TanStack Router), layout y dashboard
+  client/            React: rutas (TanStack Router), layout, dashboard, categorías y cuentas
   worker/
     api/             Rutas REST (Hono)
     auth/            Login con Auth0, sesión y consentimiento OAuth del MCP
@@ -139,6 +139,9 @@ test/                Tests de aislamiento entre usuarios
 
 - **Montos como enteros** en la unidad mínima de cada moneda (CLP sin decimales, USD en centavos).
 - Cada movimiento guarda **moneda original, tipo de cambio del día y monto en CLP**; las estadísticas usan CLP.
+- **Categorías y cuentas**: eliminar una categoría con movimientos exige reasignarlos a otra del mismo tipo (fusión)
+  o dejarlos sin categoría. Las cuentas con movimientos no se eliminan, se archivan, y siempre queda al menos una
+  activa (la que se usa por defecto).
 - **Duplicados**: mismo monto, moneda, tipo y cuenta dentro de ±2 días. Se marcan (`possibleDuplicateOf`) o se omiten con `skipDuplicates`.
 - **Operaciones masivas** usan un único parámetro JSON + `json_each()` para respetar los límites de D1 del plan gratis.
 - **Sin parpadeos al cargar**: el Worker exige sesión antes de entregar la app (si no hay, redirige al login) y los
