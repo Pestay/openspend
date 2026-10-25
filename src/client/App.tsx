@@ -68,7 +68,7 @@ function UserMenu() {
   if (!data) return null
   return (
     <form method="post" action="/auth/logout" className="order-last flex items-center gap-2 text-sm text-slate-500 sm:order-none">
-      <span>@{data.login}</span>
+      <span>{data.email}</span>
       <button className="rounded px-2 py-1 hover:bg-slate-200">Salir</button>
     </form>
   )

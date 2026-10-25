@@ -1,4 +1,5 @@
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { accounts, categories } from '../../../db/schema'
 import { formatMoney, toMinor } from '../../shared/money'
@@ -47,17 +48,24 @@ async function run(fn: () => Promise<unknown>): Promise<ToolResult> {
     if (error instanceof Error && error.message.includes('FOREIGN KEY constraint failed')) {
       return { isError: true, content: [{ type: 'text', text: 'La cuenta o categoría indicada no existe' }] }
     }
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      return { isError: true, content: [{ type: 'text', text: 'Ya existe un registro con ese nombre' }] }
+    }
     throw error
   }
 }
 
-export function buildMcpServer(env: Env) {
+// userId viene del token OAuth validado: cada herramienta opera solo sobre sus datos.
+export function buildMcpServer(env: Env, userId: string) {
   const db = getDb(env.DB)
   const server = new McpServer({ name: 'openspend', version: '0.1.0' }, { instructions: INSTRUCTIONS })
 
   // Versión legible de una transacción para el modelo.
   async function describe(transactions: Transaction[]) {
-    const [cats, accs] = await Promise.all([db.select().from(categories), db.select().from(accounts)])
+    const [cats, accs] = await Promise.all([
+      db.select().from(categories).where(eq(categories.userId, userId)),
+      db.select().from(accounts).where(eq(accounts.userId, userId)),
+    ])
     const catName = new Map(cats.map((c) => [c.id, c.name]))
     const accName = new Map(accs.map((a) => [a.id, a.name]))
     return transactions.map((t) => ({
@@ -86,10 +94,13 @@ export function buildMcpServer(env: Env) {
     () =>
       run(async () => ({
         today: todayInChile(),
-        accounts: (await getAccountsWithBalance(env.DB))
+        accounts: (await getAccountsWithBalance(env.DB, userId))
           .filter((a) => !a.archived)
           .map((a) => ({ id: a.id, name: a.name, type: a.type, currency: a.currency, balance: formatMoney(a.balanceMinor, a.currency) })),
-        categories: await db.select({ id: categories.id, name: categories.name, kind: categories.kind }).from(categories),
+        categories: await db
+          .select({ id: categories.id, name: categories.name, kind: categories.kind })
+          .from(categories)
+          .where(eq(categories.userId, userId)),
       })),
   )
 
@@ -103,7 +114,7 @@ export function buildMcpServer(env: Env) {
     },
     (input) =>
       run(async () => {
-        const result = await createTransactions(db, env.DB, {
+        const result = await createTransactions(db, env.DB, userId, {
           ...input,
           transactions: input.transactions.map((t) => ({ ...t, source: t.source === 'manual' ? 'chat' : t.source })),
         })
@@ -125,7 +136,7 @@ export function buildMcpServer(env: Env) {
       inputSchema: listTransactionsQuery,
       annotations: { readOnlyHint: true },
     },
-    (query) => run(async () => describe((await listTransactions(db, query)) as Transaction[])),
+    (query) => run(async () => describe((await listTransactions(db, userId, query)) as Transaction[])),
   )
 
   server.registerTool(
@@ -138,7 +149,7 @@ export function buildMcpServer(env: Env) {
     },
     ({ id, ...patch }) =>
       run(async () => {
-        const updated = await updateTransaction(db, env.DB, id, patch)
+        const updated = await updateTransaction(db, env.DB, userId, id, patch)
         if (!updated) throw new AppError('Transacción no encontrada', 404)
         return (await describe([updated as Transaction]))[0]
       }),
@@ -154,7 +165,7 @@ export function buildMcpServer(env: Env) {
     },
     ({ id }) =>
       run(async () => {
-        if (!(await deleteTransaction(db, id))) throw new AppError('Transacción no encontrada', 404)
+        if (!(await deleteTransaction(db, userId, id))) throw new AppError('Transacción no encontrada', 404)
         return { deleted: id }
       }),
   )
@@ -169,7 +180,7 @@ export function buildMcpServer(env: Env) {
     },
     ({ from, to }) =>
       run(async () => {
-        const s = await getSummary(env.DB, from, to)
+        const s = await getSummary(env.DB, userId, from, to)
         const clp = (n: number) => formatMoney(n, 'CLP')
         return {
           from,
@@ -205,7 +216,7 @@ export function buildMcpServer(env: Env) {
         icon: z.string().max(8).optional(),
       }),
     },
-    (input) => run(async () => (await db.insert(categories).values(input).returning())[0]),
+    (input) => run(async () => (await db.insert(categories).values({ ...input, userId }).returning())[0]),
   )
 
   server.registerTool(
@@ -219,7 +230,7 @@ export function buildMcpServer(env: Env) {
       run(async () => {
         const [account] = await db
           .insert(accounts)
-          .values({ ...data, initialBalanceMinor: toMinor(initialBalance, data.currency) })
+          .values({ ...data, userId, initialBalanceMinor: toMinor(initialBalance, data.currency) })
           .returning()
         return account
       }),

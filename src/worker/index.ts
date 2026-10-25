@@ -2,38 +2,40 @@ import { OAuthProvider } from '@cloudflare/workers-oauth-provider'
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import { Hono } from 'hono'
 import { api } from './api'
-import { authRoutes, requireSession, type AuthEnv } from './auth/routes'
+import { authRoutes, requireSession, type AuthEnv, type McpProps } from './auth/routes'
 import { AppError } from './errors'
 import { buildMcpServer } from './mcp/server'
+import { userExists } from './services/users'
 
 // Dashboard, API REST y páginas de login/consentimiento (autenticados con la cookie de sesión).
 const app = new Hono<AuthEnv>()
   .route('/', authRoutes)
   .use('/api/*', requireSession)
-  .get('/api/me', (c) => c.json({ login: c.get('session').login }))
+  .get('/api/me', (c) => c.json({ email: c.get('session').email }))
   .route('/api', api)
   .onError((err, c) => {
     if (err instanceof AppError) return c.json({ error: err.message }, err.status)
     if (err.message.includes('FOREIGN KEY constraint failed')) {
       return c.json({ error: 'La cuenta o categoría indicada no existe' }, 400)
     }
+    if (err.message.includes('UNIQUE constraint failed')) {
+      return c.json({ error: 'Ya existe un registro con ese nombre' }, 409)
+    }
     console.error(err)
     return c.json({ error: 'Error interno' }, 500)
   })
 
-interface McpProps {
-  githubUserId: string
-  login: string
-}
-
 // Endpoint MCP: OAuthProvider ya validó el token antes de llegar aquí.
 const mcpHandler = {
-  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     // ctx.props es lo que guardó completeAuthorization() en /authorize.
-    const props = ctx.props as McpProps
-    // Defensa en profundidad: si cambia el usuario permitido, los tokens antiguos dejan de servir.
-    if (props.githubUserId !== env.ALLOWED_GITHUB_USER_ID) return new Response('Forbidden', { status: 403 })
-    return createMcpHandler(() => buildMcpServer(env)).fetch(request)
+    const props = ctx.props as Partial<McpProps>
+    // Tokens emitidos antes del paso a Auth0 no traen userId; los usuarios eliminados
+    // pierden el acceso aunque su token no haya expirado.
+    if (!props.userId || !(await userExists(env.DB, props.userId))) {
+      return new Response('Forbidden', { status: 403 })
+    }
+    return createMcpHandler(() => buildMcpServer(env, props.userId!)).fetch(request)
   },
 }
 

@@ -25,7 +25,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const useMe = () =>
-  useQuery({ queryKey: ['me'], queryFn: () => request<{ login: string }>('/me'), staleTime: Infinity })
+  useQuery({ queryKey: ['me'], queryFn: () => request<{ email: string }>('/me'), staleTime: Infinity })
 
 export const useAccounts = () =>
   useQuery({ queryKey: ['accounts'], queryFn: () => request<AccountWithBalance[]>('/accounts') })

@@ -7,7 +7,7 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha en formato YYYY-M
 
 export const TRANSACTION_KINDS = ['expense', 'income', 'transfer'] as const
 export const ACCOUNT_TYPES = ['cash', 'bank', 'credit_card', 'savings', 'investment'] as const
-export const TRANSACTION_SOURCES = ['manual', 'chat', 'spendee', 'statement'] as const
+export const TRANSACTION_SOURCES = ['manual', 'chat', 'app_import', 'statement'] as const
 
 // Entrada de una transacción: el monto viene en unidades "humanas" (12990, 9.99)
 // y la API lo convierte a unidad mínima.
