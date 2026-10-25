@@ -37,7 +37,9 @@ pnpm dev                # http://localhost:5173
 
 El workflow [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml):
 
-- **En cada PR y push a `main`**: typecheck, lint, tests, build y escaneo de secretos con gitleaks. No despliega.
+- **En cada PR y push a `main`**: checks independientes **Typecheck**, **Lint**, **Tests**, **Build** y
+  **Secretos (gitleaks)**. No despliega. Los cinco son obligatorios para mergear a `main` (ruleset "Proteger main"),
+  y la rama debe estar al día con `main`.
 - **Al crear un tag `v*` sobre `main`**: repite las verificaciones, aplica las migraciones de D1 y despliega el Worker.
 
 Para publicar una versión:

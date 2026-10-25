@@ -17,9 +17,19 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Cada verificación es un check independiente (y obligatorio para mergear a main).
   check:
-    name: Typecheck, lint y build
+    name: ${{ matrix.check.name }}
     runs-on: ubuntu-latest
+    strategy:
+      # Si una falla, las demás siguen para mostrar todos los problemas de una vez.
+      fail-fast: false
+      matrix:
+        check:
+          - { name: Typecheck, run: pnpm typecheck }
+          - { name: Lint, run: pnpm lint }
+          - { name: Tests, run: pnpm test }
+          - { name: Build, run: pnpm build }
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -28,13 +38,10 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm test
-      - run: pnpm build
+      - run: ${{ matrix.check.run }}
 
   secret-scan:
-    name: Escaneo de secretos (gitleaks)
+    name: Secretos (gitleaks)
     runs-on: ubuntu-latest
     permissions:
       contents: read
