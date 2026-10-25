@@ -36,10 +36,20 @@ pnpm dev                # http://localhost:5173
 
 El workflow [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml):
 
-- **En cada PR y push**: typecheck, lint, build y escaneo de secretos con gitleaks.
-- **En `main`** (si lo anterior pasa): aplica las migraciones de D1 y despliega el Worker.
+- **En cada PR y push a `main`**: typecheck, lint, build y escaneo de secretos con gitleaks. No despliega.
+- **Al crear un tag `v*` sobre `main`**: repite las verificaciones, aplica las migraciones de D1 y despliega el Worker.
 
-Configuración necesaria en GitHub → Settings → Environments → `production` (restringido a `main`):
+Para publicar una versión:
+
+```bash
+gh release create v0.2.0 --target main --generate-notes
+```
+
+Esto crea el tag y una release con las notas generadas desde los PRs. El despliegue se rechaza si el tag no apunta
+a un commit de `main` o si no coincide con `version` de `package.json` (actualízala en el PR antes de publicar).
+Al abrir la app, la consola del navegador muestra la versión y el commit que están corriendo.
+
+Configuración necesaria en GitHub → Settings → Environments → `production` (restringido a tags `v*`):
 
 | Nombre | Tipo | Valor |
 |---|---|---|
