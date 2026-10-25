@@ -2,7 +2,7 @@ import { AuthorizationError, CimdFetchError, type ConsentDescription } from '@cl
 import { Hono, type Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
-import { auth0AuthorizeUrl, auth0LogoutUrl, fetchAuth0User, NotInvitedError } from './auth0'
+import { auth0AuthorizeUrl, auth0LogoutUrl, fetchAuth0User, NotInvitedError, verifyNativeIdToken } from './auth0'
 import { ensureUser, isActiveUser } from '../services/users'
 import {
   base64url,
@@ -32,9 +32,23 @@ export async function getActiveSession(c: Context<AuthEnv>): Promise<Session | n
   return session && (await isActiveUser(c.env.DB, session.userId)) ? session : null
 }
 
+// App móvil (POC): ID token de Auth0 en Authorization: Bearer. El primer request de un usuario
+// que nunca entró por la web lo registra, igual que /auth/callback.
+async function getBearerSession(c: Context<AuthEnv>): Promise<Session | null> {
+  const token = c.req.header('Authorization')?.match(/^Bearer (.+)$/)?.[1]
+  const user = token && (await verifyNativeIdToken(c.env, token))
+  if (!user) return null
+  const row = await c.env.DB.prepare('SELECT suspended_at FROM users WHERE id = ?')
+    .bind(user.userId)
+    .first<{ suspended_at: string | null }>()
+  if (!row) await ensureUser(c.env.DB, { id: user.userId, email: user.email })
+  else if (row.suspended_at) return null
+  return user
+}
+
 // Protege rutas del dashboard/API: sin sesión válida responde 401.
 export const requireSession = createMiddleware<AuthEnv>(async (c, next) => {
-  const session = await getActiveSession(c)
+  const session = (await getActiveSession(c)) ?? (await getBearerSession(c))
   if (!session) return c.json({ error: 'No autenticado' }, 401)
   c.set('session', session)
   await next()

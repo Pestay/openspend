@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose'
 
 // Login con Auth0 (OIDC, Authorization Code + PKCE). Solo se usa el ID token para saber
 // quién es el usuario; no se guardan tokens de Auth0.
@@ -62,9 +62,35 @@ export async function fetchAuth0User(env: Env, code: string, verifier: string, n
     audience: env.AUTH0_CLIENT_ID,
   })
   if (payload.nonce !== nonce) throw new Error('nonce inválido')
+  return invitedUser(payload)
+}
+
+function invitedUser(payload: JWTPayload) {
   if (!payload.sub || typeof payload.email !== 'string') throw new Error('ID token sin sub o email')
   // Defensa en profundidad: además de la Action que bloquea el login en Auth0, el token
   // debe traer la marca de invitado.
   if (payload[INVITED_CLAIM] !== true) throw new NotInvitedError(payload.email)
   return { userId: payload.sub, email: payload.email }
+}
+
+/**
+ * App móvil (POC): el teléfono hace el login con Auth0 (Native app, PKCE) y manda su ID token
+ * como `Authorization: Bearer`. Devuelve null si el token no es válido o la app nativa no está
+ * configurada. `keys` solo se cambia en tests.
+ */
+export async function verifyNativeIdToken(
+  env: Pick<Env, 'AUTH0_DOMAIN' | 'AUTH0_NATIVE_CLIENT_ID'>,
+  token: string,
+  keys: JWTVerifyGetKey = jwks(env.AUTH0_DOMAIN),
+) {
+  if (!env.AUTH0_NATIVE_CLIENT_ID) return null
+  try {
+    const { payload } = await jwtVerify(token, keys, {
+      issuer: `https://${env.AUTH0_DOMAIN}/`,
+      audience: env.AUTH0_NATIVE_CLIENT_ID,
+    })
+    return { ...invitedUser(payload), exp: payload.exp! }
+  } catch {
+    return null
+  }
 }
