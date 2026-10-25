@@ -23,7 +23,7 @@ const tx: Transaction = {
 
 describe('editar un movimiento', () => {
   it('el formulario parte con los valores actuales, con el monto escrito como en Chile', () => {
-    expect(editForm(tx)).toEqual({ date: '2025-10-18', amount: '42.108', categoryId: '3', description: 'Uber' })
+    expect(editForm(tx)).toEqual({ date: '2025-10-18', amount: '42.108', categoryId: '3', accountId: '1', description: 'Uber' })
   })
 
   it('sin cambios no envía nada', () => {
@@ -42,5 +42,9 @@ describe('editar un movimiento', () => {
   it('rechaza montos inválidos o no positivos', () => {
     expect(transactionPatch(tx, { ...editForm(tx), amount: 'mil' })).toEqual({ ok: false, error: 'Monto inválido' })
     expect(transactionPatch(tx, { ...editForm(tx), amount: '0' })).toEqual({ ok: false, error: 'El monto debe ser mayor que 0' })
+  })
+
+  it('permite cambiar la cuenta', () => {
+    expect(transactionPatch(tx, { ...editForm(tx), accountId: '4' })).toEqual({ ok: true, patch: { accountId: 4 } })
   })
 })

@@ -8,17 +8,18 @@ export interface EditForm {
   date: string
   amount: string // escrito como en Chile: "42.108", "9,99"
   categoryId: string // '' = sin categoría
+  accountId: string
   description: string
 }
 
-export type TransactionPatch = Partial<{ date: string; amount: number; categoryId: number | null; description: string | null }>
+export type TransactionPatch = Partial<{ date: string; amount: number; categoryId: number | null; accountId: number; description: string | null }>
 
 export function editForm(t: Transaction): EditForm {
   const decimals = t.currency === 'USD' ? 2 : 0
   const amount = new Intl.NumberFormat('es-CL', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(
     fromMinor(t.amountMinor, t.currency),
   )
-  return { date: t.date, amount, categoryId: t.categoryId ? String(t.categoryId) : '', description: t.description ?? '' }
+  return { date: t.date, amount, categoryId: t.categoryId ? String(t.categoryId) : '', accountId: String(t.accountId), description: t.description ?? '' }
 }
 
 /** Solo los campos que cambiaron, listos para PATCH /api/transactions/:id. */
@@ -33,6 +34,7 @@ export function transactionPatch(t: Transaction, form: EditForm): { ok: true; pa
     if (amount !== fromMinor(t.amountMinor, t.currency)) patch.amount = amount
   }
   if (form.categoryId !== original.categoryId) patch.categoryId = form.categoryId ? Number(form.categoryId) : null
+  if (form.accountId !== original.accountId) patch.accountId = Number(form.accountId)
   const description = form.description.trim() || null
   if (description !== (t.description ?? null)) patch.description = description
   return { ok: true, patch }

@@ -3,6 +3,7 @@ import type { z } from 'zod'
 import type { ImportedTransaction } from '../shared/importers/types'
 import { buildImportPayload, chunk, IMPORT_CHUNK_SIZE, type StartMappings } from '../shared/importers/payload'
 import { DEFAULT_PAGE_SIZE } from './pagination'
+import type { MoveResult } from './move-logic'
 import type { TransactionPatch } from './transaction-edit'
 import type {
   accountInput,
@@ -108,6 +109,23 @@ export function useDeleteTransaction() {
   const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: (id: number) => request<void>(`/transactions/${id}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  })
+}
+
+type MoveVars = { ids: number[]; accountId: number }
+
+// Vista previa de mover movimientos: no cambia nada, así que no refresca la caché.
+export function useMovePreview() {
+  return useMutation({
+    mutationFn: (vars: MoveVars) => request<MoveResult>('/transactions/move', json('POST', { ...vars, dryRun: true })),
+  })
+}
+
+export function useMoveTransactions() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: (vars: MoveVars) => request<MoveResult>('/transactions/move', json('POST', vars)),
     onSuccess: invalidate,
   })
 }
