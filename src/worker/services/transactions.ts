@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNotNull, like, lte, or, type SQL } from 'drizzle-orm'
 import type { z } from 'zod'
-import { accounts, transactions } from '../../../db/schema'
+import { accounts, categories, importBatches, transactions } from '../../../db/schema'
 import { fromMinor, toMinor, type Currency } from '../../shared/money'
 import type { createTransactionsInput, listTransactionsQuery, updateTransactionInput } from '../../shared/schemas'
 import type { CreateTransactionsResult, Transaction } from '../../shared/types'
@@ -20,15 +20,41 @@ const TRANSACTION_COLUMNS = `id, date, kind, amount_minor AS amountMinor, curren
 
 type CreateInput = z.output<typeof createTransactionsInput>
 
-export async function createTransactions(db: Db, d1: D1Database, input: CreateInput): Promise<CreateTransactionsResult> {
-  const allAccounts = await db.select().from(accounts).orderBy(accounts.id)
-  const accountById = new Map(allAccounts.map((a) => [a.id, a]))
-  const fallbackAccountId = allAccounts.find((a) => !a.archived)?.id
+// Las claves foráneas solo garantizan que la cuenta/categoría exista, no que sea del
+// usuario. Toda referencia que venga del cliente se valida contra los datos del usuario.
+async function userCategoryIds(db: Db, userId: string): Promise<Set<number>> {
+  const rows = await db.select({ id: categories.id }).from(categories).where(eq(categories.userId, userId))
+  return new Set(rows.map((r) => r.id))
+}
+
+export async function createTransactions(
+  db: Db,
+  d1: D1Database,
+  userId: string,
+  input: CreateInput,
+): Promise<CreateTransactionsResult> {
+  const [userAccounts, categoryIds] = await Promise.all([
+    db.select().from(accounts).where(eq(accounts.userId, userId)).orderBy(accounts.id),
+    userCategoryIds(db, userId),
+  ])
+  const accountById = new Map(userAccounts.map((a) => [a.id, a]))
+  const fallbackAccountId = userAccounts.find((a) => !a.archived)?.id
   if (fallbackAccountId === undefined) throw new AppError('No hay cuentas creadas')
+
+  if (input.importBatchId !== undefined) {
+    const [batch] = await db
+      .select({ id: importBatches.id })
+      .from(importBatches)
+      .where(and(eq(importBatches.id, input.importBatchId), eq(importBatches.userId, userId)))
+    if (!batch) throw new AppError(`El lote de importación ${input.importBatchId} no existe`)
+  }
 
   input.transactions.forEach((t, i) => {
     for (const id of [t.accountId, t.toAccountId]) {
       if (id !== undefined && !accountById.has(id)) throw new AppError(`Transacción ${i + 1}: la cuenta ${id} no existe`)
+    }
+    if (t.categoryId !== undefined && !categoryIds.has(t.categoryId)) {
+      throw new AppError(`Transacción ${i + 1}: la categoría ${t.categoryId} no existe`)
     }
     const account = accountById.get(t.accountId ?? fallbackAccountId)!
     if (account.currency === 'USD' && t.currency !== 'USD') {
@@ -46,6 +72,7 @@ export async function createTransactions(db: Db, d1: D1Database, input: CreateIn
     const amountMinor = toMinor(t.amount, t.currency)
     const fxRate = t.currency === 'CLP' ? 1 : rates.get(t.date)!
     return {
+      userId,
       date: t.date,
       kind: t.kind,
       amountMinor,
@@ -66,8 +93,8 @@ export async function createTransactions(db: Db, d1: D1Database, input: CreateIn
   // Una sola consulta trae todos los candidatos a duplicado del rango de fechas.
   const dates = rows.map((r) => r.date).sort()
   const { results: existing } = await d1
-    .prepare(`SELECT ${TRANSACTION_COLUMNS} FROM transactions WHERE date BETWEEN ? AND ?`)
-    .bind(addDays(dates[0], -DUPLICATE_WINDOW_DAYS), addDays(dates[dates.length - 1], DUPLICATE_WINDOW_DAYS))
+    .prepare(`SELECT ${TRANSACTION_COLUMNS} FROM transactions WHERE user_id = ? AND date BETWEEN ? AND ?`)
+    .bind(userId, addDays(dates[0], -DUPLICATE_WINDOW_DAYS), addDays(dates[dates.length - 1], DUPLICATE_WINDOW_DAYS))
     .all<Transaction>()
 
   const duplicates: CreateTransactionsResult['duplicates'] = []
@@ -97,9 +124,9 @@ export async function createTransactions(db: Db, d1: D1Database, input: CreateIn
 
   const { results: inserted } = await d1
     .prepare(
-      `INSERT INTO transactions (date, kind, amount_minor, currency, fx_rate, amount_clp, account_id,
+      `INSERT INTO transactions (user_id, date, kind, amount_minor, currency, fx_rate, amount_clp, account_id,
          to_account_id, category_id, description, merchant, source, import_batch_id, possible_duplicate_of)
-       SELECT j.value ->> 'date', j.value ->> 'kind', j.value ->> 'amountMinor', j.value ->> 'currency',
+       SELECT j.value ->> 'userId', j.value ->> 'date', j.value ->> 'kind', j.value ->> 'amountMinor', j.value ->> 'currency',
          j.value ->> 'fxRate', j.value ->> 'amountClp', j.value ->> 'accountId', j.value ->> 'toAccountId',
          j.value ->> 'categoryId', j.value ->> 'description', j.value ->> 'merchant', j.value ->> 'source',
          j.value ->> 'importBatchId', j.value ->> 'possibleDuplicateOf'
@@ -112,8 +139,9 @@ export async function createTransactions(db: Db, d1: D1Database, input: CreateIn
   return { inserted, duplicates }
 }
 
-export async function listTransactions(db: Db, query: z.output<typeof listTransactionsQuery>) {
+export async function listTransactions(db: Db, userId: string, query: z.output<typeof listTransactionsQuery>) {
   const filters: (SQL | undefined)[] = [
+    eq(transactions.userId, userId),
     query.from ? gte(transactions.date, query.from) : undefined,
     query.to ? lte(transactions.date, query.to) : undefined,
     query.accountId ? eq(transactions.accountId, query.accountId) : undefined,
@@ -136,11 +164,25 @@ export async function listTransactions(db: Db, query: z.output<typeof listTransa
 export async function updateTransaction(
   db: Db,
   d1: D1Database,
+  userId: string,
   id: number,
   patch: z.output<typeof updateTransactionInput>,
 ) {
-  const [current] = await db.select().from(transactions).where(eq(transactions.id, id))
+  const owned = and(eq(transactions.id, id), eq(transactions.userId, userId))
+  const [current] = await db.select().from(transactions).where(owned)
   if (!current) return null
+
+  for (const accountId of [patch.accountId, patch.toAccountId]) {
+    if (accountId == null) continue
+    const [account] = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.id, accountId), eq(accounts.userId, userId)))
+    if (!account) throw new AppError(`La cuenta ${accountId} no existe`)
+  }
+  if (patch.categoryId != null && !(await userCategoryIds(db, userId)).has(patch.categoryId)) {
+    throw new AppError(`La categoría ${patch.categoryId} no existe`)
+  }
 
   const { amount, ...rest } = patch
   const changes: Partial<typeof transactions.$inferInsert> = { ...rest, updatedAt: new Date().toISOString() }
@@ -158,11 +200,14 @@ export async function updateTransaction(
     })
   }
 
-  const [updated] = await db.update(transactions).set(changes).where(eq(transactions.id, id)).returning()
+  const [updated] = await db.update(transactions).set(changes).where(owned).returning()
   return updated
 }
 
-export async function deleteTransaction(db: Db, id: number) {
-  const deleted = await db.delete(transactions).where(eq(transactions.id, id)).returning({ id: transactions.id })
+export async function deleteTransaction(db: Db, userId: string, id: number) {
+  const deleted = await db
+    .delete(transactions)
+    .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
+    .returning({ id: transactions.id })
   return deleted.length > 0
 }
