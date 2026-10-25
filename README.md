@@ -35,12 +35,14 @@ pnpm dev                # http://localhost:5173
 
 ## Despliegue (GitHub Actions)
 
-El workflow [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml):
+Dos workflows:
 
-- **En cada PR y push a `main`**: checks independientes **Typecheck**, **Lint**, **Tests**, **Build** y
-  **Secretos (gitleaks)**. No despliega. Los cinco son obligatorios para mergear a `main` (ruleset "Proteger main"),
-  y la rama debe estar al día con `main`.
-- **Al crear un tag `v*` sobre `main`**: repite las verificaciones, aplica las migraciones de D1 y despliega el Worker.
+- [`ci.yml`](.github/workflows/ci.yml) — **en cada PR y en cada push a `main`**: checks independientes **Typecheck**,
+  **Lint**, **Tests**, **Build** y **Secretos (gitleaks)**. Los cinco son obligatorios para mergear a `main` (ruleset
+  "Proteger main") y la rama debe estar al día con `main`.
+- [`deploy.yml`](.github/workflows/deploy.yml) — **al crear un tag `v*`**: no repite los checks. Verifica que el tag
+  apunte a un commit de `main`, que ese commit haya pasado los cinco checks de CI (si aún corren, espera hasta 15
+  minutos) y que el tag coincida con `version` de `package.json`. Luego aplica las migraciones de D1 y despliega.
 
 Para publicar una versión:
 
@@ -48,8 +50,8 @@ Para publicar una versión:
 gh release create v0.2.0 --target main --generate-notes
 ```
 
-Esto crea el tag y una release con las notas generadas desde los PRs. El despliegue se rechaza si el tag no apunta
-a un commit de `main` o si no coincide con `version` de `package.json` (actualízala en el PR antes de publicar).
+Esto crea el tag y una release con las notas generadas desde los PRs. Actualiza `version` en `package.json` dentro del
+PR antes de publicar.
 Al abrir la app, la consola del navegador muestra la versión y el commit que están corriendo.
 
 Configuración necesaria en GitHub → Settings → Environments → `production` (restringido a tags `v*`):
