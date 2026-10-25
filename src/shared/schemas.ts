@@ -75,3 +75,36 @@ export const accountInput = z.object({
   currency: z.enum(CURRENCIES).default('CLP'),
   initialBalance: z.number().default(0),
 })
+
+export const accountUpdateInput = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    type: z.enum(ACCOUNT_TYPES),
+    initialBalance: z.number(),
+    archived: z.boolean(),
+  })
+  .partial()
+
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color en formato #RRGGBB')
+
+export const categoryInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  kind: z.enum(['expense', 'income']),
+  icon: z.string().trim().max(8).optional(),
+  color: hexColor.optional(),
+})
+
+// El tipo (gasto/ingreso) no se cambia: los movimientos ya clasificados dependen de él.
+export const categoryUpdateInput = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    icon: z.string().trim().max(8).nullable(),
+    color: hexColor.nullable(),
+  })
+  .partial()
+
+// Al eliminar una categoría con movimientos hay que decir qué hacer con ellos:
+// moverlos a otra categoría del mismo tipo (fusionar) o dejarlos sin categoría (null).
+export const deleteCategoryInput = z.object({
+  reassignTo: z.preprocess((v) => (v === 'null' ? null : v), z.coerce.number().int().positive().nullable().optional()),
+})

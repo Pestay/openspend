@@ -1,11 +1,12 @@
-import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { accounts, categories } from '../../../db/schema'
-import { toMinor } from '../../shared/money'
 import {
   accountInput,
+  accountUpdateInput,
+  categoryInput,
+  categoryUpdateInput,
   createTransactionsInput,
+  deleteCategoryInput,
   listTransactionsQuery,
   summaryQuery,
   updateTransactionInput,
@@ -13,6 +14,8 @@ import {
 import type { AuthEnv } from '../auth/routes'
 import { getDb } from '../db'
 import { AppError } from '../errors'
+import { createAccount, deleteAccount, updateAccount } from '../services/accounts'
+import { createCategory, deleteCategory, listCategories, updateCategory } from '../services/categories'
 import { getUsdClpRates } from '../services/fx'
 import { getAccountsWithBalance, getSummary } from '../services/summary'
 import {
@@ -31,22 +34,33 @@ export const api = new Hono<AuthEnv>()
   .get('/health', (c) => c.json({ ok: true }))
 
   .get('/accounts', async (c) => c.json(await getAccountsWithBalance(c.env.DB, c.get('session').userId)))
-  .post('/accounts', validate('json', accountInput), async (c) => {
-    const { initialBalance, ...data } = c.req.valid('json')
-    const [account] = await getDb(c.env.DB)
-      .insert(accounts)
-      .values({ ...data, userId: c.get('session').userId, initialBalanceMinor: toMinor(initialBalance, data.currency) })
-      .returning()
-    return c.json(account, 201)
-  })
+  .post('/accounts', validate('json', accountInput), async (c) =>
+    c.json(await createAccount(getDb(c.env.DB), c.get('session').userId, c.req.valid('json')), 201),
+  )
+  .patch('/accounts/:id', validate('param', idParam), validate('json', accountUpdateInput), async (c) =>
+    c.json(await updateAccount(getDb(c.env.DB), c.get('session').userId, c.req.valid('param').id, c.req.valid('json'))),
+  )
+  .delete('/accounts/:id', validate('param', idParam), async (c) =>
+    c.json(await deleteAccount(c.env.DB, getDb(c.env.DB), c.get('session').userId, c.req.valid('param').id)),
+  )
 
-  .get('/categories', async (c) =>
+  .get('/categories', async (c) => c.json(await listCategories(c.env.DB, c.get('session').userId)))
+  .post('/categories', validate('json', categoryInput), async (c) =>
+    c.json(await createCategory(getDb(c.env.DB), c.get('session').userId, c.req.valid('json')), 201),
+  )
+  .patch('/categories/:id', validate('param', idParam), validate('json', categoryUpdateInput), async (c) =>
+    c.json(await updateCategory(getDb(c.env.DB), c.get('session').userId, c.req.valid('param').id, c.req.valid('json'))),
+  )
+  // ?reassignTo=<id> mueve los movimientos a otra categoría; ?reassignTo=null los deja sin categoría.
+  .delete('/categories/:id', validate('param', idParam), validate('query', deleteCategoryInput), async (c) =>
     c.json(
-      await getDb(c.env.DB)
-        .select()
-        .from(categories)
-        .where(eq(categories.userId, c.get('session').userId))
-        .orderBy(categories.kind, categories.name),
+      await deleteCategory(
+        c.env.DB,
+        getDb(c.env.DB),
+        c.get('session').userId,
+        c.req.valid('param').id,
+        c.req.valid('query').reassignTo,
+      ),
     ),
   )
 

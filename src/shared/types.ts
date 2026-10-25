@@ -14,6 +14,7 @@ export interface Account {
 
 export interface AccountWithBalance extends Account {
   balanceMinor: number
+  transactionCount: number
 }
 
 export interface Category {
@@ -22,6 +23,7 @@ export interface Category {
   kind: 'expense' | 'income'
   icon: string | null
   color: string | null
+  transactionCount: number
 }
 
 export interface Transaction {
