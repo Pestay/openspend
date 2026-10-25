@@ -1,5 +1,4 @@
-# Verificaciones de cada PR y de cada commit que llega a main. Los checks de main son los que
-# deploy.yml exige antes de desplegar un tag, así nunca se despliega un commit sin verificar.
+# Verificaciones de cada PR (obligatorias para mergear a main) y de cada commit que llega a main.
 name: CI
 
 on:

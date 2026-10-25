@@ -40,9 +40,9 @@ Dos workflows:
 - [`ci.yml`](.github/workflows/ci.yml) — **en cada PR y en cada push a `main`**: checks independientes **Typecheck**,
   **Lint**, **Tests**, **Build** y **Secretos (gitleaks)**. Los cinco son obligatorios para mergear a `main` (ruleset
   "Proteger main") y la rama debe estar al día con `main`.
-- [`deploy.yml`](.github/workflows/deploy.yml) — **al crear un tag `v*`**: no repite los checks. Verifica que el tag
-  apunte a un commit de `main`, que ese commit haya pasado los cinco checks de CI (si aún corren, espera hasta 15
-  minutos) y que el tag coincida con `version` de `package.json`. Luego aplica las migraciones de D1 y despliega.
+- [`deploy.yml`](.github/workflows/deploy.yml) — **al crear un tag `v*`**: solo despliega. No corre checks, porque
+  todo commit de `main` ya los pasó en su PR. Antes de desplegar valida que el tag apunte a un commit de `main` y que
+  coincida con `version` de `package.json`; luego aplica las migraciones de D1 y despliega.
 
 Para publicar una versión:
 
