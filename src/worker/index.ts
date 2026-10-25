@@ -2,11 +2,10 @@ import { OAuthProvider } from '@cloudflare/workers-oauth-provider'
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import { Hono } from 'hono'
 import { api } from './api'
-import { authRoutes, requireSession, type AuthEnv, type McpProps } from './auth/routes'
-import { getSession } from './auth/session'
+import { authRoutes, getActiveSession, requireSession, type AuthEnv, type McpProps } from './auth/routes'
 import { AppError } from './errors'
 import { buildMcpServer } from './mcp/server'
-import { userExists } from './services/users'
+import { isActiveUser } from './services/users'
 
 // Dashboard, API REST y páginas de login/consentimiento (autenticados con la cookie de sesión).
 const app = new Hono<AuthEnv>()
@@ -18,7 +17,7 @@ const app = new Hono<AuthEnv>()
   // Navegación del dashboard: sin sesión se redirige al login antes de entregar la app, así
   // nunca se dibuja un dashboard vacío. Con sesión, se sirve la SPA (index.html).
   .get('*', async (c) => {
-    if (!(await getSession(c))) {
+    if (!(await getActiveSession(c))) {
       const url = new URL(c.req.url)
       return c.redirect(`/auth/login?${new URLSearchParams({ returnTo: url.pathname + url.search })}`)
     }
@@ -41,9 +40,9 @@ const mcpHandler = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     // ctx.props es lo que guardó completeAuthorization() en /authorize.
     const props = ctx.props as Partial<McpProps>
-    // Tokens emitidos antes del paso a Auth0 no traen userId; los usuarios eliminados
-    // pierden el acceso aunque su token no haya expirado.
-    if (!props.userId || !(await userExists(env.DB, props.userId))) {
+    // Tokens emitidos antes del paso a Auth0 no traen userId; los usuarios eliminados o
+    // suspendidos pierden el acceso aunque su token no haya expirado.
+    if (!props.userId || !(await isActiveUser(env.DB, props.userId))) {
       return new Response('Forbidden', { status: 403 })
     }
     return createMcpHandler(() => buildMcpServer(env, props.userId!)).fetch(request)

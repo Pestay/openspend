@@ -11,6 +11,9 @@ const createdAt = () =>
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull(),
+  // Si tiene fecha, el usuario está suspendido: no puede entrar al dashboard ni usar el MCP,
+  // pero sus datos se conservan (ver scripts/admin.mjs).
+  suspendedAt: text('suspended_at'),
   createdAt: createdAt(),
 })
 

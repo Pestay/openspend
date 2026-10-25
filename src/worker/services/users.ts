@@ -51,6 +51,8 @@ export async function ensureUser(d1: D1Database, user: { id: string; email: stri
   ])
 }
 
-export async function userExists(d1: D1Database, id: string): Promise<boolean> {
-  return Boolean(await d1.prepare('SELECT 1 FROM users WHERE id = ?').bind(id).first())
+// Activo = existe y no está suspendido. Se revisa en cada request del dashboard y del MCP,
+// así una suspensión corta el acceso de inmediato aunque haya sesiones o tokens vigentes.
+export async function isActiveUser(d1: D1Database, id: string): Promise<boolean> {
+  return Boolean(await d1.prepare('SELECT 1 FROM users WHERE id = ? AND suspended_at IS NULL').bind(id).first())
 }
