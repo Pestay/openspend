@@ -1,0 +1,18 @@
+name: Reporte de conducta
+description: Reportar un comportamiento contrario al Código de Conducta (para casos que no requieren privacidad).
+title: 'Conducta: '
+labels: [conducta]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Revisa el [Código de Conducta](https://github.com/carloxhunter/openspend/blob/main/CODE_OF_CONDUCT.md).
+        **Este issue es público.** Si el caso requiere privacidad, contacta directamente al mantenedor
+        ([@carloxhunter](https://github.com/carloxhunter)).
+  - type: textarea
+    id: what
+    attributes:
+      label: ¿Qué ocurrió?
+      description: Dónde (issue, PR, comentario) y cuándo. Incluye enlaces si es posible.
+    validations:
+      required: true

@@ -1,0 +1,49 @@
+name: Reportar un error
+description: Algo no funciona como debería.
+title: 'fix: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportarlo. **No incluyas datos financieros reales, tokens ni secretos.**
+        Si es un problema de seguridad, usa el [reporte privado](https://github.com/carloxhunter/openspend/security/advisories/new).
+  - type: textarea
+    id: what
+    attributes:
+      label: ¿Qué pasó?
+      description: Describe el error y qué esperabas que pasara.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      placeholder: |
+        1. Ir a …
+        2. Hacer clic en …
+        3. Ver el error
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: ¿Dónde ocurre?
+      options:
+        - Dashboard (web)
+        - Asistente vía MCP (Claude, ChatGPT, etc.)
+        - Login / invitación
+        - Landing o página de conexión
+        - Otro
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versión
+      description: Aparece en la consola del navegador al abrir la app (ej. "OpenSpend v0.8.0").
+  - type: textarea
+    id: extra
+    attributes:
+      label: Información adicional
+      description: Capturas de pantalla, mensajes de error, navegador o asistente usado.

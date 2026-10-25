@@ -1,0 +1,42 @@
+name: Solicitar licencia comercial
+description: Para usar OpenSpend con fines comerciales (servicio, producto o empresa).
+title: 'Licencia comercial: '
+labels: [licencia-comercial]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OpenSpend es gratis para uso **no comercial** ([PolyForm Noncommercial 1.0.0](https://github.com/carloxhunter/openspend/blob/main/LICENSE)).
+        Para uso comercial se requiere una licencia aparte. Cuéntanos tu caso y te contactaremos.
+        No incluyas información confidencial: este issue es público.
+  - type: input
+    id: organization
+    attributes:
+      label: Organización
+    validations:
+      required: true
+  - type: dropdown
+    id: use
+    attributes:
+      label: Tipo de uso
+      options:
+        - Ofrecerlo como servicio a terceros
+        - Integrarlo en un producto
+        - Uso interno en una empresa
+        - Otro
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Detalle del uso
+      description: Escala aproximada (usuarios, instancias) y cualquier necesidad especial.
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Cómo contactarte
+      description: Usuario de GitHub o un canal público; coordinaremos lo privado después.
+    validations:
+      required: true

@@ -205,4 +205,11 @@ desplegar el código **sin fines comerciales** (uso personal, educativo, investi
 lucro). Es *source-available*, no "open source" en el sentido de la OSI.
 
 **Uso comercial** (ofrecerlo como servicio, integrarlo en un producto o usarlo dentro de una empresa con fines de
-lucro) requiere una licencia comercial. Para solicitarla, [abre un issue](https://github.com/carloxhunter/openspend/issues).
+lucro) requiere una licencia comercial. Para solicitarla, [usa esta plantilla de issue](https://github.com/carloxhunter/openspend/issues/new?template=commercial_license.yml).
+
+## Comunidad
+
+- [Cómo contribuir](CONTRIBUTING.md) (incluye los términos de licencia de las contribuciones)
+- [Código de Conducta](CODE_OF_CONDUCT.md)
+- [Política de seguridad](SECURITY.md): las vulnerabilidades se reportan en privado
+- [Accesibilidad](ACCESSIBILITY.md)
