@@ -66,21 +66,27 @@ OpenSpend es multiusuario **solo por invitación**: cada usuario ve únicamente 
 
 **Configuración de Auth0 (una vez):**
 
+Un mismo tenant de Auth0 puede servir a varias apps (login compartido con SSO). La invitación es **por app**: estar
+invitado a una no da acceso a otra.
+
 1. *Applications → Create Application → Regular Web Application*.
    - Allowed Callback URLs: `https://<tu-dominio>/auth/callback, http://localhost:5173/auth/callback`
    - Allowed Logout URLs: `https://<tu-dominio>, http://localhost:5173`
+   - *Advanced Settings → Application Metadata*: key `app`, value `openspend`.
    - En *Connections*, dejar solo **Username-Password-Authentication**.
 2. *Authentication → Database → Username-Password-Authentication*: activar **Disable Sign Ups**.
-3. *Actions → Triggers → post-login*: agregar esta Action, que bloquea a quien no esté invitado y marca el ID token
-   (la app rechaza tokens sin esa marca):
+3. *Actions → Triggers → post-login*: agregar esta Action. Bloquea a quien no esté invitado a la app que pide el login
+   y marca el ID token (OpenSpend rechaza tokens sin la marca `https://openspend/invited`):
 
    ```js
    exports.onExecutePostLogin = async (event, api) => {
-     if (event.user.app_metadata?.invited !== true) {
-       api.access.deny('Esta cuenta no tiene una invitación a OpenSpend.')
+     const app = event.client.metadata?.app
+     const invitedTo = event.user.app_metadata?.apps ?? []
+     if (!app || !invitedTo.includes(app)) {
+       api.access.deny('Esta cuenta no tiene una invitación a esta aplicación.')
        return
      }
-     api.idToken.setCustomClaim('https://openspend/invited', true)
+     api.idToken.setCustomClaim(`https://${app}/invited`, true)
    }
    ```
 
@@ -88,7 +94,8 @@ OpenSpend es multiusuario **solo por invitación**: cada usuario ve únicamente 
 
 1. *User Management → Users → Create User* con su email (conexión Username-Password-Authentication) y una
    contraseña temporal cualquiera.
-2. En el usuario, *app_metadata*: `{ "invited": true }` → Save.
+2. En el usuario, *app_metadata*: `{ "apps": ["openspend"] }` → Save. Para darle acceso a otra app del mismo tenant,
+   se agrega su nombre a la lista.
 3. Pídele que entre a la app y use **"¿Olvidaste tu contraseña?"** para definir la suya.
 
 En su primer login se le crean sus categorías y una cuenta "Principal". Para quitar el acceso, bloquea o elimina el
