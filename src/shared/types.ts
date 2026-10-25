@@ -60,3 +60,11 @@ export interface Summary {
   byCategory: { categoryId: number | null; name: string; kind: 'expense' | 'income'; totalClp: number; count: number }[]
   byMonth: { month: string; incomeClp: number; expenseClp: number }[]
 }
+
+// Un asistente (cliente MCP) al que el usuario dio acceso vía OAuth.
+export interface Connection {
+  id: string
+  clientName: string
+  redirectHost: string | null
+  connectedAt: string
+}
