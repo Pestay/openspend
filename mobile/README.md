@@ -48,4 +48,9 @@ cd android && ./gradlew assembleRelease
 # → android/app/build/outputs/apk/release/app-release.apk
 ```
 
+**En Windows** el build nativo falla con `Filename longer than 260 characters` (el ninja de CMake 3.22 no soporta rutas
+largas). Solución: instalar CMake 3.31 (`sdkmanager "cmake;3.31.6"`), agregar a `android/local.properties`
+`cmake.dir=C:/Users/<usuario>/AppData/Local/Android/Sdk/cmake/3.31.6` y compilar desde una ruta corta. Para un APK más
+liviano, solo para teléfonos actuales: `./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a`.
+
 Sin Android Studio: `npx eas-cli@latest build -p android --profile preview` compila el APK en la nube (cuenta de Expo gratis).
