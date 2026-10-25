@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNotNull, like, lte, or, type SQL } from 'drizzle-orm'
+import { and, count, desc, eq, gte, isNotNull, like, lte, or } from 'drizzle-orm'
 import type { z } from 'zod'
 import { accounts, categories, importBatches, transactions } from '../../../db/schema'
 import { fromMinor, toMinor, type Currency } from '../../shared/money'
@@ -20,6 +20,50 @@ const TRANSACTION_COLUMNS = `id, date, kind, amount_minor AS amountMinor, curren
 
 type CreateInput = z.output<typeof createTransactionsInput>
 
+type DuplicateKey = Pick<Transaction, 'accountId' | 'amountMinor' | 'currency' | 'kind' | 'date'>
+
+/**
+ * Movimientos existentes del usuario que podrían duplicar alguno en esas fechas (±ventana).
+ * `excludeBatchId` deja fuera un lote en curso: sus tandas no se comparan entre sí.
+ */
+export async function existingTransactionsAround(
+  d1: D1Database,
+  userId: string,
+  dates: string[],
+  excludeBatchId?: number,
+): Promise<Transaction[]> {
+  if (dates.length === 0) return []
+  const sorted = [...dates].sort()
+  const { results } = await d1
+    .prepare(
+      `SELECT ${TRANSACTION_COLUMNS} FROM transactions
+       WHERE user_id = ? AND date BETWEEN ? AND ? AND (import_batch_id IS NULL OR import_batch_id != ?)`,
+    )
+    .bind(userId, addDays(sorted[0], -DUPLICATE_WINDOW_DAYS), addDays(sorted[sorted.length - 1], DUPLICATE_WINDOW_DAYS), excludeBatchId ?? -1)
+    .all<Transaction>()
+  return results
+}
+
+const duplicateKey = (t: DuplicateKey) => `${t.accountId}|${t.amountMinor}|${t.currency}|${t.kind}`
+
+/**
+ * Índice para buscar duplicados en tiempo constante por fila (mismo monto, moneda, tipo y
+ * cuenta dentro de ±DUPLICATE_WINDOW_DAYS días). Evita recorrer todo `existing` por cada fila,
+ * lo que en importaciones grandes excede el límite de CPU.
+ */
+export function duplicateFinder(existing: Transaction[]): (row: DuplicateKey) => Transaction[] {
+  const index = new Map<string, Transaction[]>()
+  for (const e of existing) {
+    const key = duplicateKey(e)
+    index.set(key, [...(index.get(key) ?? []), e])
+  }
+  return (row) => {
+    const from = addDays(row.date, -DUPLICATE_WINDOW_DAYS)
+    const to = addDays(row.date, DUPLICATE_WINDOW_DAYS)
+    return (index.get(duplicateKey(row)) ?? []).filter((e) => e.date >= from && e.date <= to)
+  }
+}
+
 // Las claves foráneas solo garantizan que la cuenta/categoría exista, no que sea del
 // usuario. Toda referencia que venga del cliente se valida contra los datos del usuario.
 async function userCategoryIds(db: Db, userId: string): Promise<Set<number>> {
@@ -27,11 +71,14 @@ async function userCategoryIds(db: Db, userId: string): Promise<Set<number>> {
   return new Set(rows.map((r) => r.id))
 }
 
+// `existing` permite fijar contra qué se buscan duplicados. Las importaciones por tandas
+// pasan lo que había antes de empezar, para no comparar el archivo consigo mismo.
 export async function createTransactions(
   db: Db,
   d1: D1Database,
   userId: string,
   input: CreateInput,
+  options: { existing?: Transaction[] } = {},
 ): Promise<CreateTransactionsResult> {
   const [userAccounts, categoryIds] = await Promise.all([
     db.select().from(accounts).where(eq(accounts.userId, userId)).orderBy(accounts.id),
@@ -91,26 +138,13 @@ export async function createTransactions(
   })
 
   // Una sola consulta trae todos los candidatos a duplicado del rango de fechas.
-  const dates = rows.map((r) => r.date).sort()
-  const { results: existing } = await d1
-    .prepare(`SELECT ${TRANSACTION_COLUMNS} FROM transactions WHERE user_id = ? AND date BETWEEN ? AND ?`)
-    .bind(userId, addDays(dates[0], -DUPLICATE_WINDOW_DAYS), addDays(dates[dates.length - 1], DUPLICATE_WINDOW_DAYS))
-    .all<Transaction>()
+  const existing = options.existing ?? (await existingTransactionsAround(d1, userId, rows.map((r) => r.date)))
 
   const duplicates: CreateTransactionsResult['duplicates'] = []
   const toInsert: typeof rows = []
+  const findDuplicates = duplicateFinder(existing)
   rows.forEach((row, i) => {
-    const from = addDays(row.date, -DUPLICATE_WINDOW_DAYS)
-    const to = addDays(row.date, DUPLICATE_WINDOW_DAYS)
-    const matches = existing.filter(
-      (e) =>
-        e.accountId === row.accountId &&
-        e.amountMinor === row.amountMinor &&
-        e.currency === row.currency &&
-        e.kind === row.kind &&
-        e.date >= from &&
-        e.date <= to,
-    )
+    const matches = findDuplicates(row)
     if (matches.length === 0) {
       toInsert.push(row)
       return
@@ -139,8 +173,9 @@ export async function createTransactions(
   return { inserted, duplicates }
 }
 
-export async function listTransactions(db: Db, userId: string, query: z.output<typeof listTransactionsQuery>) {
-  const filters: (SQL | undefined)[] = [
+// Filtros comunes del listado y su conteo; siempre acotados al usuario.
+function transactionFilters(userId: string, query: z.output<typeof listTransactionsQuery>) {
+  return and(
     eq(transactions.userId, userId),
     query.from ? gte(transactions.date, query.from) : undefined,
     query.to ? lte(transactions.date, query.to) : undefined,
@@ -148,17 +183,23 @@ export async function listTransactions(db: Db, userId: string, query: z.output<t
     query.categoryId ? eq(transactions.categoryId, query.categoryId) : undefined,
     query.kind ? eq(transactions.kind, query.kind) : undefined,
     query.onlyPossibleDuplicates ? isNotNull(transactions.possibleDuplicateOf) : undefined,
-    query.q
-      ? or(like(transactions.description, `%${query.q}%`), like(transactions.merchant, `%${query.q}%`))
-      : undefined,
-  ]
+    query.q ? or(like(transactions.description, `%${query.q}%`), like(transactions.merchant, `%${query.q}%`)) : undefined,
+  )
+}
+
+export async function listTransactions(db: Db, userId: string, query: z.output<typeof listTransactionsQuery>) {
   return db
     .select()
     .from(transactions)
-    .where(and(...filters))
+    .where(transactionFilters(userId, query))
     .orderBy(desc(transactions.date), desc(transactions.id))
     .limit(query.limit)
     .offset(query.offset)
+}
+
+export async function countTransactions(db: Db, userId: string, query: z.output<typeof listTransactionsQuery>): Promise<number> {
+  const [row] = await db.select({ total: count() }).from(transactions).where(transactionFilters(userId, query))
+  return row.total
 }
 
 export async function updateTransaction(

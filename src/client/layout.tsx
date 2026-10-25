@@ -16,6 +16,7 @@ export function RootLayout() {
               { to: '/', label: 'Resumen' },
               { to: '/categorias', label: 'Categorías' },
               { to: '/cuentas', label: 'Cuentas' },
+              { to: '/importar', label: 'Importar' },
             ].map((item) => (
               <Link
                 key={item.to}

@@ -1,4 +1,5 @@
 import type { AccountWithBalance, Summary } from '../../shared/types'
+import { accountsWithReconciledBalance } from './reconciliations'
 
 // Las estadísticas se calculan en CLP (amount_clp). Las transferencias no cuentan
 // como ingreso ni gasto.
@@ -45,32 +46,20 @@ export async function getSummary(d1: D1Database, userId: string, from: string, t
   }
 }
 
-// Saldo por cuenta en la moneda de la cuenta. Si un movimiento está en otra moneda
-// (ej. compra en USD con tarjeta en CLP) se usa su monto convertido. Las cuentas en USD
-// solo aceptan movimientos en USD (lo valida createTransactions).
+// Saldo por cuenta en la moneda de la cuenta, anclado a su última conciliación (ver
+// reconciliations.ts), con la cantidad de movimientos de cada una.
 export async function getAccountsWithBalance(d1: D1Database, userId: string): Promise<AccountWithBalance[]> {
-  const { results } = await d1
-    .prepare(
-      `WITH movements AS (
-         SELECT account_id AS account, CASE kind WHEN 'income' THEN 1 ELSE -1 END AS sign,
-           amount_minor, currency, amount_clp, fx_rate
-         FROM transactions WHERE user_id = ?1
-         UNION ALL
-         SELECT to_account_id, 1, amount_minor, currency, amount_clp, fx_rate
-         FROM transactions WHERE user_id = ?1 AND kind = 'transfer' AND to_account_id IS NOT NULL
-       )
-       SELECT a.id, a.name, a.type, a.currency, a.initial_balance_minor AS initialBalanceMinor,
-         a.archived,
-         a.initial_balance_minor + COALESCE(SUM(m.sign * CASE
-           WHEN m.currency = a.currency THEN m.amount_minor
-           ELSE m.amount_clp
-         END), 0) AS balanceMinor,
-         COUNT(m.account) AS transactionCount
-       FROM accounts a LEFT JOIN movements m ON m.account = a.id
-       WHERE a.user_id = ?1
-       GROUP BY a.id ORDER BY a.archived, a.id`,
-    )
-    .bind(userId)
-    .all<Omit<AccountWithBalance, 'archived'> & { archived: number }>()
-  return results.map((r) => ({ ...r, archived: Boolean(r.archived) }))
+  const [{ results }, balances] = await Promise.all([
+    d1
+      .prepare(
+        `SELECT a.id, a.name, a.type, a.currency, a.initial_balance_minor AS initialBalanceMinor, a.archived,
+           (SELECT COUNT(*) FROM transactions t
+            WHERE t.user_id = a.user_id AND (t.account_id = a.id OR t.to_account_id = a.id)) AS transactionCount
+         FROM accounts a WHERE a.user_id = ? ORDER BY a.archived, a.id`,
+      )
+      .bind(userId)
+      .all<Omit<AccountWithBalance, 'archived' | 'balanceMinor' | 'lastReconciliation'> & { archived: number }>(),
+    accountsWithReconciledBalance(d1, userId),
+  ])
+  return results.map((r) => ({ ...r, archived: Boolean(r.archived), ...balances.get(r.id)! }))
 }

@@ -120,8 +120,8 @@ describe('aislamiento entre usuarios (API)', () => {
     const tx = await aliceExpense()
     const bob = { headers: { Cookie: await sessionCookie(BOB) } }
 
-    const list = (await (await SELF.fetch('http://localhost/api/transactions', bob)).json()) as unknown[]
-    expect(list).toHaveLength(0)
+    const list = (await (await SELF.fetch('http://localhost/api/transactions', bob)).json()) as { items: unknown[] }
+    expect(list.items).toHaveLength(0)
     const categories = (await (await SELF.fetch('http://localhost/api/categories', bob)).json()) as { id: number }[]
     expect(categories.map((c) => c.id)).not.toContain((await idsOf(ALICE.id)).categoryId)
 
@@ -134,8 +134,35 @@ describe('aislamiento entre usuarios (API)', () => {
     expect(patch.status).toBe(404)
 
     const alice = { headers: { Cookie: await sessionCookie(ALICE) } }
-    const aliceList = (await (await SELF.fetch('http://localhost/api/transactions', alice)).json()) as unknown[]
-    expect(aliceList).toHaveLength(1)
+    const aliceList = (await (await SELF.fetch('http://localhost/api/transactions', alice)).json()) as { items: unknown[]; total: number }
+    expect(aliceList.items).toHaveLength(1)
+    expect(aliceList.total).toBe(1)
+  })
+
+  it('pagina los movimientos y devuelve el total del período, solo del usuario', async () => {
+    const { accountId } = await idsOf(ALICE.id)
+    await createTransactions(db(), env.DB, ALICE.id, {
+      transactions: Array.from({ length: 12 }, (_, i) => ({
+        date: `2026-03-${String(i + 1).padStart(2, '0')}`,
+        kind: 'expense' as const,
+        amount: 1000 + i,
+        currency: 'CLP' as const,
+        accountId,
+        source: 'manual' as const,
+      })),
+      skipDuplicates: false,
+    })
+    const alice = { headers: { Cookie: await sessionCookie(ALICE) } }
+    const page = (await (await SELF.fetch('http://localhost/api/transactions?from=2026-03-01&to=2026-03-31&limit=5&offset=10', alice)).json()) as {
+      items: { date: string }[]
+      total: number
+    }
+    expect(page.total).toBe(12)
+    expect(page.items.map((t) => t.date)).toEqual(['2026-03-02', '2026-03-01'])
+
+    const bob = { headers: { Cookie: await sessionCookie(BOB) } }
+    const bobPage = (await (await SELF.fetch('http://localhost/api/transactions?from=2026-03-01&to=2026-03-31', bob)).json()) as { total: number }
+    expect(bobPage.total).toBe(0)
   })
 
   it('rechaza una cookie firmada con otro secreto', async () => {

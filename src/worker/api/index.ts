@@ -7,6 +7,13 @@ import {
   categoryUpdateInput,
   createTransactionsInput,
   deleteCategoryInput,
+  appendImportRowsRequest,
+  finishImportRequest,
+  importRequest,
+  startImportRequest,
+  listReconciliationsQuery,
+  mergeCategoriesInput,
+  reconcileInput,
   listTransactionsQuery,
   summaryQuery,
   updateTransactionInput,
@@ -16,10 +23,13 @@ import { getDb } from '../db'
 import { AppError } from '../errors'
 import { createAccount, deleteAccount, updateAccount } from '../services/accounts'
 import { listConnections, revokeConnection } from '../services/connections'
-import { createCategory, deleteCategory, listCategories, updateCategory } from '../services/categories'
+import { createCategory, deleteCategory, listCategories, mergeCategories, updateCategory } from '../services/categories'
 import { getUsdClpRates } from '../services/fx'
+import { appendImportRows, finishImport, listImports, previewImport, revertImport, startImport } from '../services/imports'
+import { deleteReconciliation, listReconciliations, previewReconciliation, reconcile } from '../services/reconciliations'
 import { getAccountsWithBalance, getSummary } from '../services/summary'
 import {
+  countTransactions,
   createTransactions,
   deleteTransaction,
   listTransactions,
@@ -49,6 +59,10 @@ export const api = new Hono<AuthEnv>()
   .post('/categories', validate('json', categoryInput), async (c) =>
     c.json(await createCategory(getDb(c.env.DB), c.get('session').userId, c.req.valid('json')), 201),
   )
+  .post('/categories/merge', validate('json', mergeCategoriesInput), async (c) => {
+    const { sourceIds, targetId } = c.req.valid('json')
+    return c.json(await mergeCategories(c.env.DB, getDb(c.env.DB), c.get('session').userId, sourceIds, targetId))
+  })
   .patch('/categories/:id', validate('param', idParam), validate('json', categoryUpdateInput), async (c) =>
     c.json(await updateCategory(getDb(c.env.DB), c.get('session').userId, c.req.valid('param').id, c.req.valid('json'))),
   )
@@ -71,9 +85,47 @@ export const api = new Hono<AuthEnv>()
     c.json(await revokeConnection(c.env.OAUTH_PROVIDER, c.get('session').userId, c.req.valid('param').grantId)),
   )
 
-  .get('/transactions', validate('query', listTransactionsQuery), async (c) =>
-    c.json(await listTransactions(getDb(c.env.DB), c.get('session').userId, c.req.valid('query'))),
+  // Conciliaciones: saldo real de una cuenta en una fecha (ancla del saldo, no un movimiento).
+  .get('/reconciliations', validate('query', listReconciliationsQuery), async (c) =>
+    c.json(await listReconciliations(c.env.DB, getDb(c.env.DB), c.get('session').userId, c.req.valid('query').accountId)),
   )
+  .post('/reconciliations/preview', validate('json', reconcileInput), async (c) =>
+    c.json(await previewReconciliation(c.env.DB, getDb(c.env.DB), c.get('session').userId, c.req.valid('json'))),
+  )
+  .post('/reconciliations', validate('json', reconcileInput), async (c) =>
+    c.json(await reconcile(c.env.DB, getDb(c.env.DB), c.get('session').userId, c.req.valid('json')), 201),
+  )
+  .delete('/reconciliations/:id', validate('param', idParam), async (c) =>
+    c.json(await deleteReconciliation(c.env.DB, c.get('session').userId, c.req.valid('param').id)),
+  )
+
+  // Importación de historial en etapas (cada request hace poco trabajo, por el límite de CPU):
+  // vista previa (no escribe) → start → tandas de ≤ 500 movimientos → finish. Historial y revertir.
+  .post('/imports/preview', validate('json', importRequest), async (c) =>
+    c.json(await previewImport(getDb(c.env.DB), c.env.DB, c.get('session').userId, c.req.valid('json'))),
+  )
+  .post('/imports/start', validate('json', startImportRequest), async (c) =>
+    c.json(await startImport(getDb(c.env.DB), c.env.DB, c.get('session').userId, c.req.valid('json')), 201),
+  )
+  .post('/imports/:id/rows', validate('param', idParam), validate('json', appendImportRowsRequest), async (c) =>
+    c.json(await appendImportRows(getDb(c.env.DB), c.env.DB, c.get('session').userId, c.req.valid('param').id, c.req.valid('json'))),
+  )
+  .post('/imports/:id/finish', validate('param', idParam), validate('json', finishImportRequest), async (c) =>
+    c.json(await finishImport(c.env.DB, getDb(c.env.DB), c.get('session').userId, c.req.valid('param').id, c.req.valid('json'))),
+  )
+  .get('/imports', async (c) => c.json(await listImports(c.env.DB, c.get('session').userId)))
+  .delete('/imports/:id', validate('param', idParam), async (c) =>
+    c.json(await revertImport(c.env.DB, getDb(c.env.DB), c.get('session').userId, c.req.valid('param').id)),
+  )
+
+  // Página de movimientos y total del filtro (para el paginador).
+  .get('/transactions', validate('query', listTransactionsQuery), async (c) => {
+    const db = getDb(c.env.DB)
+    const userId = c.get('session').userId
+    const query = c.req.valid('query')
+    const [items, total] = await Promise.all([listTransactions(db, userId, query), countTransactions(db, userId, query)])
+    return c.json({ items, total })
+  })
   .post('/transactions', validate('json', createTransactionsInput), async (c) =>
     c.json(await createTransactions(getDb(c.env.DB), c.env.DB, c.get('session').userId, c.req.valid('json')), 201),
   )

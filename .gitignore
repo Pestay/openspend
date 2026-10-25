@@ -39,3 +39,7 @@ dist-ssr
 *.qif
 data/
 exports/
+
+# Carpeta para exports e históricos a importar: solo se versiona la guía; los datos nunca.
+imports/*
+!imports/README.md

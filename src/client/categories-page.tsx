@@ -1,7 +1,8 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import type { Category } from '../shared/types'
-import { categoriesQuery, useCreateCategory, useDeleteCategory, useUpdateCategory } from './api'
+import { categoriesQuery, useCreateCategory, useDeleteCategory, useMergeCategories, useUpdateCategory } from './api'
+import { mergePlan } from './import-logic'
 import { Button, Card, ErrorText, inputClass } from './ui'
 
 const KIND_LABEL = { expense: 'Gastos', income: 'Ingresos' } as const
@@ -13,6 +14,7 @@ export function CategoriesPage() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Categorías</h1>
       <NewCategory />
+      <MergeCategories categories={categories} />
       <div className="grid gap-6 md:grid-cols-2">
         {(['expense', 'income'] as const).map((kind) => (
           <Card key={kind} title={KIND_LABEL[kind]}>
@@ -57,6 +59,81 @@ function NewCategory() {
         <Button disabled={create.isPending}>Agregar</Button>
       </form>
       <ErrorText error={create.error} />
+    </Card>
+  )
+}
+
+// Combina varias categorías del mismo tipo en una: sus movimientos pasan a la de destino.
+function MergeCategories({ categories }: { categories: Category[] }) {
+  const merge = useMergeCategories()
+  const [kind, setKind] = useState<'expense' | 'income'>('expense')
+  const [sourceIds, setSourceIds] = useState<number[]>([])
+  const [targetId, setTargetId] = useState<number | null>(null)
+  const options = categories.filter((c) => c.kind === kind)
+  const plan = mergePlan(categories, sourceIds, targetId)
+  const toggle = (id: number) => setSourceIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
+
+  async function onMerge() {
+    if (!plan.ok || targetId === null) return
+    await merge.mutateAsync({ sourceIds, targetId })
+    setSourceIds([])
+    setTargetId(null)
+  }
+
+  return (
+    <Card title="Combinar categorías">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <select
+          className={inputClass}
+          value={kind}
+          onChange={(e) => {
+            setKind(e.target.value as 'expense' | 'income')
+            setSourceIds([])
+            setTargetId(null)
+          }}
+        >
+          <option value="expense">Gastos</option>
+          <option value="income">Ingresos</option>
+        </select>
+        <span className="text-slate-500">Combinar las marcadas en</span>
+        <select className={inputClass} value={targetId ?? ''} onChange={(e) => setTargetId(e.target.value ? Number(e.target.value) : null)}>
+          <option value="">Categoría de destino…</option>
+          {options.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.icon} {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {options
+          .filter((c) => c.id !== targetId)
+          .map((c) => (
+            <label
+              key={c.id}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-sm ${sourceIds.includes(c.id) ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'}`}
+            >
+              <input type="checkbox" className="accent-emerald-700" checked={sourceIds.includes(c.id)} onChange={() => toggle(c.id)} />
+              {c.icon} {c.name} <span className="text-xs text-slate-400">{c.transactionCount}</span>
+            </label>
+          ))}
+      </div>
+      {(sourceIds.length > 0 || targetId !== null) && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          {plan.ok ? (
+            <span>
+              Se moverán <strong>{plan.moved}</strong> movimiento(s) a <strong>{plan.target}</strong> y se eliminarán:{' '}
+              {plan.removed.join(', ')}.
+            </span>
+          ) : (
+            <span className="text-slate-500">{plan.error}</span>
+          )}
+          <Button variant="danger" disabled={!plan.ok || merge.isPending} onClick={onMerge}>
+            Combinar
+          </Button>
+        </div>
+      )}
+      <ErrorText error={merge.error} />
     </Card>
   )
 }

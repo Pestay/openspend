@@ -155,6 +155,31 @@ db/
 test/                Tests de aislamiento entre usuarios
 ```
 
+## Conciliar saldo
+
+Conciliar es registrar **"al cierre de esta fecha, el saldo real de la cuenta era X"** (por ejemplo, el que muestra el
+banco). La conciliación es un **ancla**: el saldo de la cuenta parte de la más reciente y suma solo los movimientos
+posteriores. No crea movimientos ni afecta las estadísticas, y muestra la **diferencia sin registrar** (lo real menos
+lo calculado: si es negativa, hay gastos sin anotar).
+
+Se concilia desde **Cuentas → Conciliar** o conversando con el asistente ("en el banco tengo 1.234.567"), siempre
+con vista previa. Al importar, las categorías marcadas como conciliación se convierten en conciliaciones.
+
+## Importar historial
+
+La página **Importar** (`/app/importar`) carga movimientos de otras apps. Hace las mismas preguntas que haría un
+asistente: a qué cuenta va cada billetera, cómo asignar las categorías (híbrido, solo las tuyas o copiar tal cual,
+con ajuste por fila y opción de combinar), qué hacer con etiquetas y duplicados. Cada categoría del origen se puede **marcar como conciliación** (para quienes
+usan una categoría tipo "Ajuste" para corregir el saldo): sus movimientos se convierten en conciliaciones en vez de
+gastos o ingresos. Nada viene marcado; si el nombre lo parece, solo se sugiere. Muestra una vista
+previa sin escribir nada y, al confirmar, crea un **lote de importación** que se puede revertir completo.
+
+Cada origen es un adaptador en `src/shared/importers/` (hoy: `spendee`), compartido por el navegador y el servidor.
+El archivo **se lee en el navegador** y al servidor solo llegan movimientos normalizados. Para respetar el límite de
+CPU por request del plan gratis de Workers, la importación va en etapas: vista previa (no escribe) → `start` (lote,
+cuentas y categorías) → tandas de hasta 500 movimientos → `finish` (conciliaciones). Si se corta a mitad de camino, el
+lote queda como *incompleto* y se puede revertir. Ver [`imports/README.md`](imports/README.md).
+
 ## Decisiones
 
 - **Montos como enteros** en la unidad mínima de cada moneda (CLP sin decimales, USD en centavos).
@@ -193,7 +218,9 @@ test/                Tests de aislamiento entre usuarios
 - [x] Página "Conecta tu asistente" con revocación de accesos
 - [x] Landing pública y página pública de conexión
 - [ ] Ajustes del usuario (asistentes conectados, preferencias)
-- [ ] Importador desde otras apps de finanzas (CSV) y lotes de importación reversibles
+- [x] Importador de historial (Spendee CSV) con vista previa y lotes reversibles; combinar categorías
+- [x] Conciliación de saldos con diferencia sin registrar
+- [ ] Importación desde R2 / Drive y más orígenes
 - [ ] Registro rápido en lenguaje natural dentro del dashboard (Workers AI), con cuota por usuario
 - [ ] Carga de cartolas bancarias
 - [ ] Gráficos y presupuestos por categoría

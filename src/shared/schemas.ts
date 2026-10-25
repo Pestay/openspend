@@ -108,3 +108,85 @@ export const categoryUpdateInput = z
 export const deleteCategoryInput = z.object({
   reassignTo: z.preprocess((v) => (v === 'null' ? null : v), z.coerce.number().int().positive().nullable().optional()),
 })
+
+// --- Importación de datos históricos (las mismas decisiones que pregunta el asistente) ---
+
+const accountTarget = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('existing'), accountId: z.number().int().positive() }),
+  z.object({ type: z.literal('create'), name: z.string().trim().min(1).max(100), accountType: z.enum(ACCOUNT_TYPES) }),
+])
+
+const categoryTarget = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('existing'), categoryId: z.number().int().positive() }),
+  z.object({ type: z.literal('create'), name: z.string().trim().min(1).max(100) }),
+])
+
+export const importOptions = z.object({
+  // Billetera del origen → cuenta de OpenSpend. Sin indicar: la cuenta principal.
+  accounts: z.record(z.string(), accountTarget).default({}),
+  // hybrid: estándar a tus categorías y personalizadas como nuevas · existing: solo tus
+  // categorías · copy: copia las del origen tal cual.
+  categoryStrategy: z.enum(['hybrid', 'existing', 'copy']).default('hybrid'),
+  // Ajustes manuales por categoría del origen, clave "kind|nombre".
+  categoryOverrides: z.record(z.string(), categoryTarget).default({}),
+  // Checkbox "Marcar como conciliación" por categoría del origen ("kind|nombre"): sus
+  // movimientos son ajustes de saldo y se convierten en conciliaciones. Nada viene marcado.
+  reconcileCategories: z.record(z.string(), z.boolean()).default({}),
+  labels: z.enum(['append', 'discard']).default('append'),
+  duplicates: z.enum(['skip', 'mark']).default('skip'),
+})
+
+// Movimiento ya normalizado por el adaptador (el archivo se procesa en el navegador).
+const importedRow = z.object({
+  date: isoDate,
+  kind: z.enum(['expense', 'income']),
+  amount: z.number().positive(),
+  currency: z.enum(CURRENCIES),
+  description: z.string().max(2000).nullable(),
+  labels: z.array(z.string().max(100)).max(50),
+  sourceWallet: z.string().max(200),
+  sourceCategory: z.string().max(200),
+})
+
+// Vista previa: todos los movimientos normalizados (sin escribir nada).
+export const importRequest = z.object({
+  adapter: z.string().min(1).max(50),
+  fileNames: z.array(z.string().max(200)).min(1).max(20),
+  rows: z.array(importedRow).min(1).max(20_000),
+  options: importOptions.prefault({}),
+})
+
+// Inicio de la importación: solo las categorías y billeteras distintas, no los movimientos.
+export const startImportRequest = z.object({
+  adapter: z.string().min(1).max(50),
+  fileNames: z.array(z.string().max(200)).min(1).max(20),
+  categories: z.array(z.object({ kind: z.enum(['expense', 'income']), sourceCategory: z.string().max(200) })).min(1).max(1000),
+  wallets: z.array(z.string().max(200)).min(1).max(100),
+  options: importOptions.prefault({}),
+})
+
+// Una tanda de movimientos (con cuenta y categoría ya mapeadas) para un lote en curso.
+export const appendImportRowsRequest = z.object({
+  transactions: z.array(transactionInput).min(1).max(500),
+  skipDuplicates: z.boolean().default(true),
+})
+
+export const finishImportRequest = z.object({
+  adjustments: z.array(z.object({ accountId: z.number().int().positive(), date: isoDate, deltaMinor: z.number().int() })).max(20_000),
+})
+
+export const mergeCategoriesInput = z.object({
+  sourceIds: z.array(z.number().int().positive()).min(1).max(100),
+  targetId: z.number().int().positive(),
+})
+
+export const reconcileInput = z.object({
+  accountId: z.number().int().positive(),
+  date: isoDate,
+  balance: z.number().finite(), // saldo real, en unidades normales y en la moneda de la cuenta
+  note: z.string().trim().max(300).optional(),
+})
+
+export const listReconciliationsQuery = z.object({
+  accountId: z.coerce.number().int().positive().optional(),
+})

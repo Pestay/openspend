@@ -77,3 +77,27 @@ export async function deleteCategory(d1: D1Database, db: Db, userId: string, id:
   ])
   return { deleted: id, movedTransactions: used ?? 0, reassignedTo: reassignTo ?? null }
 }
+
+/**
+ * Combina varias categorías en una: mueve todos sus movimientos a `targetId` y las elimina.
+ * Todas deben ser del usuario y del mismo tipo (gasto/ingreso). Ocurre en un solo batch.
+ */
+export async function mergeCategories(d1: D1Database, db: Db, userId: string, sourceIds: number[], targetId: number) {
+  const ids = [...new Set(sourceIds)].filter((id) => id !== targetId)
+  if (ids.length === 0) throw new AppError('Elige al menos una categoría distinta de la de destino')
+  const target = await findOwned(db, userId, targetId)
+  const sources = await Promise.all(ids.map((id) => findOwned(db, userId, id)))
+  const otherKind = sources.find((s) => s.kind !== target.kind)
+  if (otherKind) {
+    throw new AppError(`"${otherKind.name}" y "${target.name}" son de distinto tipo (gasto/ingreso); no se pueden combinar`)
+  }
+
+  const json = JSON.stringify(ids)
+  const [moved] = await d1.batch([
+    d1
+      .prepare('UPDATE transactions SET category_id = ? WHERE user_id = ? AND category_id IN (SELECT value FROM json_each(?))')
+      .bind(targetId, userId, json),
+    d1.prepare('DELETE FROM categories WHERE user_id = ? AND id IN (SELECT value FROM json_each(?))').bind(userId, json),
+  ])
+  return { target: target.name, merged: sources.map((s) => s.name), movedTransactions: moved.meta.changes }
+}

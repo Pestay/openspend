@@ -4,6 +4,7 @@ import { formatMoney, fromMinor, type Currency } from '../shared/money'
 import { ACCOUNT_TYPES } from '../shared/schemas'
 import type { AccountWithBalance } from '../shared/types'
 import { accountsQuery, useCreateAccount, useDeleteAccount, useUpdateAccount } from './api'
+import { LastReconciliation, ReconcilePanel, ReconciliationHistory } from './reconcile-panel'
 import { Button, Card, ErrorText, inputClass } from './ui'
 
 type AccountType = (typeof ACCOUNT_TYPES)[number]
@@ -89,6 +90,8 @@ function NewAccount() {
 
 function AccountRow({ account, isLastActive }: { account: AccountWithBalance; isLastActive: boolean }) {
   const [editing, setEditing] = useState(false)
+  const [panel, setPanel] = useState<'reconcile' | 'history' | null>(null)
+  const toggle = (next: 'reconcile' | 'history') => setPanel((p) => (p === next ? null : next))
   const update = useUpdateAccount()
   const remove = useDeleteAccount()
   const error = update.error ?? remove.error
@@ -138,8 +141,21 @@ function AccountRow({ account, isLastActive }: { account: AccountWithBalance; is
           <span className="ml-2 text-xs text-slate-400">
             {TYPE_LABEL[account.type as AccountType] ?? account.type} · {account.currency} · {account.transactionCount} mov.
           </span>
+          <span className="block">
+            <LastReconciliation account={account} />
+          </span>
         </span>
         <span className="tabular-nums">{formatMoney(account.balanceMinor, account.currency)}</span>
+        <span className="flex gap-1">
+          {!account.archived && (
+            <Button variant="secondary" onClick={() => toggle('reconcile')}>
+              Conciliar
+            </Button>
+          )}
+          <Button variant="ghost" onClick={() => toggle('history')}>
+            Historial
+          </Button>
+        </span>
         <span className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100">
           <Button variant="ghost" onClick={() => setEditing(true)}>
             Editar
@@ -162,6 +178,8 @@ function AccountRow({ account, isLastActive }: { account: AccountWithBalance; is
           </Button>
         </span>
       </div>
+      {panel === 'reconcile' && <ReconcilePanel account={account} onDone={() => setPanel(null)} />}
+      {panel === 'history' && <ReconciliationHistory account={account} />}
       <ErrorText error={error} />
     </li>
   )

@@ -1,12 +1,22 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, createRoute, createRouter } from '@tanstack/react-router'
 import { z } from 'zod'
-import { accountsQuery, categoriesQuery, connectionsQuery, meQuery, summaryQuery, transactionsQuery } from './api'
+import {
+  accountsQuery,
+  categoriesQuery,
+  connectionsQuery,
+  importsQuery,
+  meQuery,
+  summaryQuery,
+  transactionsQuery,
+} from './api'
 import { AccountsPage } from './accounts-page'
 import { CategoriesPage } from './categories-page'
+import { ImportPage } from './import-page'
 import { Dashboard, DashboardSkeleton } from './dashboard'
-import { currentMonth, monthRange } from './dates'
+import { today } from './dates'
 import { ErrorScreen, RootLayout, Splash } from './layout'
+import { parsePeriod, periodRange } from './period'
 
 // Los loaders precargan los datos en la caché de TanStack Query antes de dibujar la ruta,
 // así los componentes nunca muestran estados vacíos mientras cargan.
@@ -20,10 +30,17 @@ const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   errorComponent: ErrorScreen,
 })
 
+// Período del dashboard en la URL: ?vista=mes&mes=2026-10 · ?vista=anio&anio=2024 · ?vista=todo
 const dashboardSearch = z.object({
+  vista: z.enum(['mes', 'anio', 'todo']).optional().catch(undefined),
   mes: z
     .string()
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .optional()
+    .catch(undefined),
+  anio: z
+    .string()
+    .regex(/^\d{4}$/)
     .optional()
     .catch(undefined),
 })
@@ -32,9 +49,8 @@ const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   validateSearch: dashboardSearch,
-  loaderDeps: ({ search }) => ({ mes: search.mes ?? currentMonth() }),
-  loader: ({ context: { queryClient }, deps: { mes } }) => {
-    const { from, to } = monthRange(mes)
+  loaderDeps: ({ search }) => periodRange(parsePeriod(search, today())),
+  loader: ({ context: { queryClient }, deps: { from, to } }) => {
     return Promise.all([
       queryClient.ensureQueryData(summaryQuery(from, to)),
       queryClient.ensureQueryData(transactionsQuery(from, to)),
@@ -60,7 +76,18 @@ const accountsRoute = createRoute({
   component: AccountsPage,
 })
 
-const routeTree = rootRoute.addChildren([dashboardRoute, categoriesRoute, accountsRoute])
+const importRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/importar',
+  loader: ({ context: { queryClient } }) =>
+    Promise.all([
+      queryClient.ensureQueryData(importsQuery),
+      queryClient.ensureQueryData(accountsQuery),
+    ]),
+  component: ImportPage,
+})
+
+const routeTree = rootRoute.addChildren([dashboardRoute, categoriesRoute, accountsRoute, importRoute])
 
 export function createAppRouter(queryClient: QueryClient) {
   return createRouter({

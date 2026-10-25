@@ -8,6 +8,8 @@ import {
   accountUpdateInput,
   categoryInput,
   categoryUpdateInput,
+  mergeCategoriesInput,
+  reconcileInput,
   createTransactionsInput,
   listTransactionsQuery,
   summaryQuery,
@@ -17,7 +19,9 @@ import type { Transaction } from '../../shared/types'
 import { getDb, todayInChile } from '../db'
 import { AppError } from '../errors'
 import { createAccount, deleteAccount, updateAccount } from '../services/accounts'
-import { createCategory, deleteCategory, listCategories, updateCategory } from '../services/categories'
+import { createCategory, deleteCategory, listCategories, mergeCategories, updateCategory } from '../services/categories'
+import { listImports, revertImport } from '../services/imports'
+import { deleteReconciliation, listReconciliations, previewReconciliation, reconcile } from '../services/reconciliations'
 import { getUsdClpRates } from '../services/fx'
 import { getAccountsWithBalance, getSummary } from '../services/summary'
 import { createTransactions, deleteTransaction, listTransactions, updateTransaction } from '../services/transactions'
@@ -40,7 +44,13 @@ Flujo recomendado:
    confirmación, update_transaction. Para borrar, confirma siempre antes de delete_transaction.
 6. Categorías y cuentas se administran con create/update/delete_category y create/update/delete_account, siempre
    con confirmación previa. Para fusionar categorías usa delete_category con reassignTo. Las cuentas con
-   movimientos no se eliminan: se archivan (update_account con archived=true).
+   movimientos no se eliminan: se archivan (update_account con archived=true). Para juntar varias categorías en
+   una usa merge_categories.
+7. Si el usuario dice cuánto tiene realmente en una cuenta ("en el banco tengo 1.234.567"), concilia: primero
+   preview_reconciliation, muestra la diferencia sin registrar y, si confirma, reconcile_balance. No inventes
+   movimientos para cuadrar el saldo.
+8. Las importaciones de historial se hacen desde la página Importar del dashboard; con list_imports y revert_import
+   puedes ver y deshacer una importación completa (con confirmación).
 
 Los montos se envían en unidades normales (12990, 9.99), no en centavos.`
 
@@ -116,6 +126,13 @@ export function buildMcpServer(env: Env, userId: string) {
             currency: a.currency,
             balance: formatMoney(a.balanceMinor, a.currency),
             transactions: a.transactionCount,
+            lastReconciliation: a.lastReconciliation
+              ? {
+                  date: a.lastReconciliation.date,
+                  balance: formatMoney(a.lastReconciliation.balanceMinor, a.currency),
+                  unregisteredDifference: formatMoney(a.lastReconciliation.differenceMinor, a.currency),
+                }
+              : null,
           })),
         categories: (await listCategories(env.DB, userId)).map((c) => ({
           id: c.id,
@@ -259,6 +276,96 @@ export function buildMcpServer(env: Env, userId: string) {
       annotations: { destructiveHint: true },
     },
     ({ id, reassignTo }) => run(() => deleteCategory(env.DB, db, userId, id, reassignTo)),
+  )
+
+  server.registerTool(
+    'merge_categories',
+    {
+      title: 'Combinar categorías',
+      description:
+        'Combina varias categorías (sourceIds) en una (targetId): mueve sus movimientos y elimina las de origen. Todas deben ser del mismo tipo. Confirma con el usuario antes de usarla.',
+      inputSchema: mergeCategoriesInput,
+      annotations: { destructiveHint: true },
+    },
+    ({ sourceIds, targetId }) => run(() => mergeCategories(env.DB, db, userId, sourceIds, targetId)),
+  )
+
+  server.registerTool(
+    'preview_reconciliation',
+    {
+      title: 'Vista previa de conciliación',
+      description:
+        'Compara el saldo real que indica el usuario (en la moneda de la cuenta, al cierre de la fecha) con el saldo que calcula OpenSpend, y devuelve la diferencia sin registrar. No guarda nada. Úsala siempre antes de reconcile_balance y muéstrale el resultado al usuario.',
+      inputSchema: reconcileInput.omit({ note: true }),
+      annotations: { readOnlyHint: true },
+    },
+    (input) =>
+      run(async () => {
+        const p = await previewReconciliation(env.DB, db, userId, input)
+        const currency = (await getAccountsWithBalance(env.DB, userId)).find((a) => a.id === input.accountId)!.currency
+        return {
+          calculated: formatMoney(p.calculatedMinor, currency),
+          real: formatMoney(p.balanceMinor, currency),
+          unregisteredDifference: formatMoney(p.differenceMinor, currency),
+          meaning: p.differenceMinor === 0 ? 'cuadra' : p.differenceMinor < 0 ? 'faltan gastos por registrar' : 'faltan ingresos por registrar',
+        }
+      }),
+  )
+
+  server.registerTool(
+    'reconcile_balance',
+    {
+      title: 'Conciliar saldo',
+      description:
+        'Registra el saldo real de una cuenta al cierre de una fecha. Pasa a ser el ancla del saldo: no crea movimientos ni afecta las estadísticas. Úsala solo después de mostrar preview_reconciliation y que el usuario confirme.',
+      inputSchema: reconcileInput,
+    },
+    (input) => run(() => reconcile(env.DB, db, userId, input)),
+  )
+
+  server.registerTool(
+    'list_reconciliations',
+    {
+      title: 'Conciliaciones',
+      description: 'Lista las conciliaciones de saldo (más recientes primero) con su diferencia sin registrar.',
+      inputSchema: z.object({ accountId: z.number().int().positive().optional() }),
+      annotations: { readOnlyHint: true },
+    },
+    ({ accountId }) => run(() => listReconciliations(env.DB, db, userId, accountId)),
+  )
+
+  server.registerTool(
+    'delete_reconciliation',
+    {
+      title: 'Eliminar conciliación',
+      description: 'Elimina una conciliación; el saldo vuelve a calcularse sin ella. Confirma con el usuario antes de usarla.',
+      inputSchema: z.object({ id: z.number().int().positive() }),
+      annotations: { destructiveHint: true },
+    },
+    ({ id }) => run(() => deleteReconciliation(env.DB, userId, id)),
+  )
+
+  server.registerTool(
+    'list_imports',
+    {
+      title: 'Importaciones',
+      description: 'Lista las importaciones de datos históricos (lotes) con su estado y cantidad de movimientos.',
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true },
+    },
+    () => run(() => listImports(env.DB, userId)),
+  )
+
+  server.registerTool(
+    'revert_import',
+    {
+      title: 'Revertir importación',
+      description:
+        'Revierte una importación completa: elimina todos los movimientos de ese lote. Confirma con el usuario antes de usarla.',
+      inputSchema: z.object({ id: z.number().int().positive() }),
+      annotations: { destructiveHint: true },
+    },
+    ({ id }) => run(() => revertImport(env.DB, db, userId, id)),
   )
 
   server.registerTool(

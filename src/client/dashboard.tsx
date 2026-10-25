@@ -1,7 +1,8 @@
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { getRouteApi, Link } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { formatMoney, type Currency } from '../shared/money'
+import type { Category, Transaction } from '../shared/types'
 import {
   accountsQuery,
   categoriesQuery,
@@ -9,39 +10,119 @@ import {
   transactionsQuery,
   useCreateTransactions,
   useDeleteTransaction,
+  useUpdateTransaction,
 } from './api'
 import { Connections } from './connections'
-import { currentMonth, monthLabel, monthRange, shiftMonth, today } from './dates'
+import { DEFAULT_PAGE_SIZE, formatDate, PAGE_SIZES, pageInfo, type PageSize } from './pagination'
+import { editForm, transactionPatch, type EditForm as EditFormValues } from './transaction-edit'
+import { LastReconciliation } from './reconcile-panel'
+import { today } from './dates'
+import { parsePeriod, periodLabel, periodRange, shiftPeriod, totalsByYear, type Bar, type Period, type View } from './period'
 import { Button, Card, ErrorText, inputClass } from './ui'
 
 const clp = (n: number) => formatMoney(n, 'CLP')
 
 const route = getRouteApi('/')
 
+
+const VIEWS: { view: View; label: string }[] = [
+  { view: 'mes', label: 'Mes' },
+  { view: 'anio', label: 'Año' },
+  { view: 'todo', label: 'Todo' },
+]
+
 export function Dashboard() {
-  const { mes = currentMonth() } = route.useSearch()
-  const { from, to } = monthRange(mes)
+  const period = parsePeriod(route.useSearch(), today())
+  const { from, to } = periodRange(period)
 
   return (
     <>
-      <nav className="flex items-center justify-center gap-2" aria-label="Mes">
-        <Link to="/" search={{ mes: shiftMonth(mes, -1) }} className="rounded px-2 py-1 hover:bg-slate-200">
-          ←
-        </Link>
-        <span className="w-44 text-center font-medium capitalize">{monthLabel(mes)}</span>
-        <Link to="/" search={{ mes: shiftMonth(mes, 1) }} className="rounded px-2 py-1 hover:bg-slate-200">
-          →
-        </Link>
-      </nav>
+      <PeriodNav period={period} />
       <SummaryCards from={from} to={to} />
+      {period.view !== 'mes' && <Evolution period={period} from={from} to={to} />}
       <div className="grid gap-6 md:grid-cols-2">
         <CategoryBreakdown from={from} to={to} />
         <Accounts />
       </div>
       <QuickAdd />
-      <TransactionList from={from} to={to} />
+      {/* key: al cambiar de período, el paginador vuelve a la primera página. */}
+      <TransactionList key={`${from}|${to}`} from={from} to={to} />
       <Connections />
     </>
+  )
+}
+
+// Selector Mes · Año · Todo y flechas para moverse (las vistas viven en la URL).
+function PeriodNav({ period }: { period: Period }) {
+  const prev = shiftPeriod(period, -1)
+  const next = shiftPeriod(period, 1)
+  const arrow = 'rounded px-2 py-1 hover:bg-slate-200'
+  return (
+    <nav className="flex flex-wrap items-center justify-center gap-4" aria-label="Período">
+      <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
+        {VIEWS.map(({ view, label }) => (
+          <Link
+            key={view}
+            to="/"
+            search={view === 'mes' ? { vista: 'mes', mes: period.month } : view === 'anio' ? { vista: 'anio', anio: period.year } : { vista: 'todo' }}
+            className={`rounded-md px-3 py-1 ${period.view === view ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        {prev && (
+          <Link to="/" search={prev} className={arrow} aria-label="Anterior">
+            ←
+          </Link>
+        )}
+        <span className="min-w-44 text-center font-medium capitalize">{periodLabel(period)}</span>
+        {next && (
+          <Link to="/" search={next} className={arrow} aria-label="Siguiente">
+            →
+          </Link>
+        )}
+      </div>
+    </nav>
+  )
+}
+
+// Ingresos vs gastos por mes (vista año) o por año (vista todo).
+function Evolution({ period, from, to }: { period: Period; from: string; to: string }) {
+  const { data } = useSuspenseQuery(summaryQuery(from, to))
+  const bars: Bar[] =
+    period.view === 'anio'
+      ? data.byMonth.map((m) => ({
+          label: new Date(`${m.month}-15T12:00:00Z`).toLocaleDateString('es-CL', { month: 'short', timeZone: 'UTC' }),
+          incomeClp: m.incomeClp,
+          expenseClp: m.expenseClp,
+        }))
+      : totalsByYear(data.byMonth)
+  const max = Math.max(1, ...bars.flatMap((b) => [b.incomeClp, b.expenseClp]))
+  return (
+    <Card title={period.view === 'anio' ? 'Evolución mensual' : 'Evolución anual'}>
+      {bars.length === 0 ? (
+        <p className="text-sm text-slate-400">Sin movimientos en este período.</p>
+      ) : (
+
+        <ul className="space-y-2">
+          {bars.map((b) => (
+            <li key={b.label} className="grid grid-cols-[3.5rem_1fr_auto] items-center gap-3 text-sm">
+              <span className="capitalize text-slate-500">{b.label}</span>
+              <span className="space-y-1">
+                <span className="block h-2 rounded bg-emerald-400" style={{ width: `${(b.incomeClp / max) * 100}%` }} />
+                <span className="block h-2 rounded bg-rose-400" style={{ width: `${(b.expenseClp / max) * 100}%` }} />
+              </span>
+              <span className="text-right text-xs tabular-nums">
+                <span className="block text-emerald-700">+{clp(b.incomeClp)}</span>
+                <span className="block text-rose-700">−{clp(b.expenseClp)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   )
 }
 
@@ -93,7 +174,7 @@ function CategoryBreakdown({ from, to }: { from: string; to: string }) {
   return (
     <Card title="Gastos por categoría">
       {expenses.length === 0 ? (
-        <p className="text-sm text-slate-400">Sin gastos este mes.</p>
+        <p className="text-sm text-slate-400">Sin gastos en este período.</p>
       ) : (
         <ul className="space-y-2">
           {expenses.map((c) => (
@@ -121,8 +202,13 @@ function Accounts() {
         {data
           .filter((a) => !a.archived)
           .map((a) => (
-            <li key={a.id} className="flex justify-between py-2 text-sm">
-              <span>{a.name}</span>
+            <li key={a.id} className="flex items-start justify-between gap-2 py-2 text-sm">
+              <span>
+                {a.name}
+                <span className="block">
+                  <LastReconciliation account={a} />
+                </span>
+              </span>
               <span className="tabular-nums">{formatMoney(a.balanceMinor, a.currency)}</span>
             </li>
           ))}
@@ -190,48 +276,183 @@ function QuickAdd() {
 }
 
 function TransactionList({ from, to }: { from: string; to: string }) {
-  const { data: transactions } = useSuspenseQuery(transactionsQuery(from, to))
+  const [page, setPage] = useState(0)
+  const [size, setSize] = useState<PageSize>(DEFAULT_PAGE_SIZE)
+  const { data, isFetching } = useQuery(transactionsQuery(from, to, page, size))
+  const transactions = data?.items ?? []
+  const info = pageInfo(data?.total ?? 0, page, size)
   const { data: categories } = useSuspenseQuery(categoriesQuery)
-  const remove = useDeleteTransaction()
   const categoryById = new Map(categories.map((c) => [c.id, c]))
+  // El resumen es solo lectura; editar y eliminar requieren entrar al modo edición.
+  const [editMode, setEditMode] = useState(false)
 
   return (
-    <Card title="Movimientos">
-      {transactions.length === 0 ? (
-        <p className="text-sm text-slate-400">Sin movimientos este mes.</p>
+    <Card
+      title="Movimientos"
+      action={
+        data && data.total > 0 ? (
+          <Button variant={editMode ? 'primary' : 'secondary'} onClick={() => setEditMode((v) => !v)}>
+            {editMode ? 'Listo' : 'Editar'}
+          </Button>
+        ) : undefined
+      }
+    >
+      {!data ? (
+        <p className="text-sm text-slate-400">Cargando…</p>
+      ) : data.total === 0 ? (
+        <p className="text-sm text-slate-400">Sin movimientos en este período.</p>
       ) : (
-        <ul className="divide-y divide-slate-100">
-          {transactions.map((t) => {
-            const category = t.categoryId ? categoryById.get(t.categoryId) : undefined
-            const sign = t.kind === 'income' ? '+' : t.kind === 'expense' ? '−' : ''
-            return (
-              <li key={t.id} className="group flex items-center gap-3 py-2 text-sm">
-                <span className="w-20 shrink-0 text-slate-400 tabular-nums">{t.date.slice(5)}</span>
-                <span className="shrink-0">{category?.icon ?? '•'}</span>
-                <span className="min-w-0 flex-1 truncate">
-                  {t.description ?? t.merchant ?? category?.name ?? '—'}
-                  {t.possibleDuplicateOf && (
-                    <span className="ml-2 rounded bg-amber-100 px-1.5 text-xs text-amber-700">¿duplicado?</span>
-                  )}
-                </span>
-                <span
-                  className={`tabular-nums ${t.kind === 'income' ? 'text-emerald-600' : t.kind === 'expense' ? 'text-rose-600' : ''}`}
-                >
-                  {sign}
-                  {formatMoney(t.amountMinor, t.currency)}
-                </span>
-                <button
-                  className="text-slate-300 opacity-0 group-hover:opacity-100 hover:text-rose-600"
-                  onClick={() => remove.mutate(t.id)}
-                  title="Eliminar"
-                >
-                  ✕
-                </button>
-              </li>
-            )
-          })}
+        <>
+        <ul className={`divide-y divide-slate-100 ${isFetching ? 'opacity-60' : ''}`}>
+          {transactions.map((t) => (
+            <TransactionRow
+              key={t.id}
+              transaction={t}
+              category={t.categoryId ? categoryById.get(t.categoryId) : undefined}
+              categories={categories}
+              editMode={editMode}
+            />
+          ))}
         </ul>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 text-sm text-slate-500">
+          <label className="flex items-center gap-2">
+            Mostrar
+            <select
+              className={inputClass}
+              value={size}
+              onChange={(e) => {
+                setSize(Number(e.target.value) as PageSize)
+                setPage(0)
+              }}
+            >
+              {PAGE_SIZES.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            por página
+          </label>
+          <span className="tabular-nums">
+            {info.from}–{info.to} de {data?.total.toLocaleString('es-CL')}
+          </span>
+          <span className="flex items-center gap-1">
+            <Button variant="ghost" disabled={!info.hasPrev} onClick={() => setPage(0)} aria-label="Primera página">
+              «
+            </Button>
+            <Button variant="ghost" disabled={!info.hasPrev} onClick={() => setPage((p) => p - 1)}>
+              ← Anterior
+            </Button>
+            <span className="tabular-nums">
+              {page + 1} / {info.pages}
+            </span>
+            <Button variant="ghost" disabled={!info.hasNext} onClick={() => setPage((p) => p + 1)}>
+              Siguiente →
+            </Button>
+            <Button variant="ghost" disabled={!info.hasNext} onClick={() => setPage(info.pages - 1)} aria-label="Última página">
+              »
+            </Button>
+          </span>
+        </div>
+        </>
       )}
     </Card>
+  )
+}
+
+// --- Fila de movimiento: solo lectura, o con acciones en el modo edición ---
+
+function TransactionRow({
+  transaction: t,
+  category,
+  categories,
+  editMode,
+}: {
+  transaction: Transaction
+  category: Category | undefined
+  categories: Category[]
+  editMode: boolean
+}) {
+  const [mode, setMode] = useState<'view' | 'edit' | 'delete'>('view')
+  const remove = useDeleteTransaction()
+  const sign = t.kind === 'income' ? '+' : t.kind === 'expense' ? '−' : ''
+  const active = editMode ? mode : 'view'
+
+  return (
+    <li className="py-2 text-sm">
+      <div className="flex items-center gap-3">
+        <span className="w-24 shrink-0 text-slate-400 tabular-nums">{formatDate(t.date)}</span>
+        <span className="shrink-0">{category?.icon ?? '•'}</span>
+        <span className="min-w-0 flex-1 truncate">
+          {t.description ?? t.merchant ?? category?.name ?? '—'}
+          {t.possibleDuplicateOf && <span className="ml-2 rounded bg-amber-100 px-1.5 text-xs text-amber-700">¿duplicado?</span>}
+        </span>
+        <span className={`tabular-nums ${t.kind === 'income' ? 'text-emerald-600' : t.kind === 'expense' ? 'text-rose-600' : ''}`}>
+          {sign}
+          {formatMoney(t.amountMinor, t.currency)}
+        </span>
+        {editMode &&
+          (active === 'delete' ? (
+            <span className="flex items-center gap-1">
+              <span className="text-xs text-slate-500">¿Eliminar?</span>
+              <Button variant="danger" disabled={remove.isPending} onClick={() => remove.mutate(t.id)}>
+                Sí
+              </Button>
+              <Button variant="ghost" onClick={() => setMode('view')}>
+                No
+              </Button>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1">
+              <Button variant="ghost" onClick={() => setMode(active === 'edit' ? 'view' : 'edit')}>
+                Editar
+              </Button>
+              <Button variant="ghost" onClick={() => setMode('delete')}>
+                Eliminar
+              </Button>
+            </span>
+          ))}
+      </div>
+      {active === 'edit' && <EditForm transaction={t} categories={categories} onClose={() => setMode('view')} />}
+      <ErrorText error={remove.error} />
+    </li>
+  )
+}
+
+function EditForm({ transaction, categories, onClose }: { transaction: Transaction; categories: Category[]; onClose: () => void }) {
+  const [form, setForm] = useState<EditFormValues>(() => editForm(transaction))
+  const [error, setError] = useState<string | null>(null)
+  const update = useUpdateTransaction()
+  const set = (key: keyof EditFormValues) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  async function onSave(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const result = transactionPatch(transaction, form)
+    if (!result.ok) return setError(result.error)
+    if (Object.keys(result.patch).length > 0) await update.mutateAsync({ id: transaction.id, ...result.patch })
+    onClose()
+  }
+
+  return (
+    <form onSubmit={onSave} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2">
+      <input className={inputClass} type="date" value={form.date} onChange={set('date')} required />
+      <input className={`${inputClass} w-32`} inputMode="decimal" value={form.amount} onChange={set('amount')} aria-label="Monto" />
+      <select className={inputClass} value={form.categoryId} onChange={set('categoryId')} aria-label="Categoría">
+        <option value="">Sin categoría</option>
+        {categories
+          .filter((c) => c.kind === transaction.kind)
+          .map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.icon} {c.name}
+            </option>
+          ))}
+      </select>
+      <input className={`${inputClass} min-w-40 flex-1`} value={form.description} onChange={set('description')} placeholder="Descripción" />
+      <Button disabled={update.isPending}>Guardar</Button>
+      <Button type="button" variant="ghost" onClick={onClose}>
+        Cancelar
+      </Button>
+      {(error || update.error) && <span className="w-full text-xs text-rose-600">{error ?? update.error?.message}</span>}
+    </form>
   )
 }

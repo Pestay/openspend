@@ -58,7 +58,8 @@ export const importBatches = sqliteTable('import_batches', {
   userId: userId(),
   source: text('source', { enum: ['manual', 'chat', 'app_import', 'statement'] }).notNull(),
   label: text('label').notNull(),
-  status: text('status', { enum: ['active', 'reverted'] }).notNull().default('active'),
+  // importing: se están cargando tandas; active: terminada; reverted: deshecha.
+  status: text('status', { enum: ['importing', 'active', 'reverted'] }).notNull().default('active'),
   createdAt: createdAt(),
 })
 
@@ -105,4 +106,24 @@ export const exchangeRates = sqliteTable(
     fetchedAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.currency, t.date] })],
+)
+
+// Conciliaciones: "al cierre de `date`, el saldo real de la cuenta era `balanceMinor`" (en la
+// moneda de la cuenta). Son anclas para el saldo, no movimientos: no afectan las estadísticas.
+export const balanceReconciliations = sqliteTable(
+  'balance_reconciliations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: userId(),
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(), // YYYY-MM-DD
+    balanceMinor: integer('balance_minor').notNull(),
+    note: text('note'),
+    // Si vino de una importación, se elimina al revertirla.
+    importBatchId: integer('import_batch_id').references(() => importBatches.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('reconciliations_account_date_idx').on(t.userId, t.accountId, t.date)],
 )
